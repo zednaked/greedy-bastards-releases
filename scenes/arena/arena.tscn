@@ -1,0 +1,69 @@
+[gd_scene format=3 uid="uid://rena"]
+
+[ext_resource type="PackedScene" uid="uid://vcea660ijdy8" path="res://assets/models/Arena.glb" id="1"]
+[ext_resource type="Script" uid="uid://cy3jmcbowaejf" path="res://scripts/arena_walls.gd" id="2"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
+sky_top_color = Color(0.06, 0.06, 0.14, 1)
+sky_horizon_color = Color(0.42, 0.22, 0.1, 1)
+sky_curve = 0.35999995
+ground_bottom_color = Color(0.26347953, 0.2807973, 0.002980208, 1)
+ground_horizon_color = Color(0.8359664, 0, 0.2775483, 1)
+sun_angle_max = 35.0
+sun_curve = 0.10090756
+energy_multiplier = 1.65
+
+[sub_resource type="Sky" id="Sky_1"]
+sky_material = SubResource("ProceduralSkyMaterial_1")
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 2
+sky = SubResource("Sky_1")
+sky_custom_fov = 48.1
+ambient_light_source = 3
+ambient_light_color = Color(0.23771691, 0.41639206, 0.78784674, 1)
+ambient_light_sky_contribution = 0.58
+ambient_light_energy = 0.45
+reflected_light_source = 2
+tonemap_mode = 2
+tonemap_exposure = 1.1
+sdfgi_use_occlusion = true
+glow_normalized = true
+glow_intensity = 0.87
+glow_strength = 0.24
+glow_bloom = 0.33
+fog_light_color = Color(0.52, 0.34, 0.18, 1)
+fog_aerial_perspective = 0.4
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.0157
+volumetric_fog_albedo = Color(0.73333335, 0.32156864, 0.050980393, 1)
+volumetric_fog_emission_energy = 16.12
+volumetric_fog_detail_spread = 2.070529
+volumetric_fog_ambient_inject = 2.97
+volumetric_fog_temporal_reprojection_amount = 0.908
+adjustment_enabled = true
+adjustment_brightness = 0.95
+adjustment_contrast = 1.035
+adjustment_saturation = 0.89
+
+[node name="Arena" type="Node3D" unique_id=443239156]
+
+[node name="ArenaModel" parent="." unique_id=112233445 instance=ExtResource("1")]
+
+[node name="ArenaWalls" type="Node3D" parent="." unique_id=556677889]
+script = ExtResource("2")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=391803361]
+transform = Transform3D(0.707107, -0.5, 0.5, 0, 0.707107, 0.707107, -0.707107, -0.5, 0.5, 0, 10, 0)
+light_color = Color(1, 0.88, 0.72, 1)
+light_energy = 0.712
+light_indirect_energy = 7.473
+light_volumetric_fog_energy = 4.929
+light_bake_mode = 1
+shadow_enabled = true
+shadow_reverse_cull_face = true
+shadow_opacity = 0.94
+shadow_blur = 0.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1023457719]
+environment = SubResource("Environment_1")

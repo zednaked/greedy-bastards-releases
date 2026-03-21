@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://bomb001"]
+
+[ext_resource type="Script" path="res://scripts/enemies/bomb.gd" id="1_bomb"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_1"]
+radius = 0.14
+height = 0.28
+
+[sub_resource type="StandardMaterial3D" id="Mat_1"]
+albedo_color = Color(0.12, 0.08, 0.05, 1)
+roughness = 0.9
+
+[node name="Bomb" type="Node3D"]
+script = ExtResource("1_bomb")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("SphereMesh_1")
+surface_material_override/0 = SubResource("Mat_1")

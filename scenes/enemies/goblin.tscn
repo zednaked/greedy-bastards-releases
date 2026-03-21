@@ -1,0 +1,41 @@
+[gd_scene format=3 uid="uid://goblin"]
+
+[ext_resource type="Script" uid="uid://o1feld2ufckj" path="res://scripts/enemies/enemy_controller.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://d0t1ke0b26kl8" path="res://assets/models/goblin.glb" id="2"]
+
+[sub_resource type="CapsuleShape3D" id="1"]
+radius = 0.5024414
+height = 1.0048828
+
+[sub_resource type="ParticleProcessMaterial" id="2"]
+direction = Vector3(0, 1, 0)
+spread = 60.0
+initial_velocity_min = 2.0
+initial_velocity_max = 5.0
+color = Color(0.7, 0, 0, 1)
+
+[node name="Goblin" type="CharacterBody3D" unique_id=1901867248]
+transform = Transform3D(1, 0, 0, 0, 0.9802056, 0.19798242, 0, -0.19798242, 0.9802056, 0, 0, 0)
+script = ExtResource("1")
+stopping_distance = 1.145
+walk_leg_swing = 2.09
+walk_knee_bend = 2.6
+walk_arm_swing = 5.625
+walk_spine_lean = 1.31
+walk_spine_sway = 1.5
+walk_freq = 3.37
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1095980934]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.012686312, 0.1670737, 0.029906273)
+shape = SubResource("1")
+
+[node name="GoblinMesh" parent="." unique_id=1883765866 instance=ExtResource("2")]
+transform = Transform3D(0.07005954, 0.044620894, 0.9965443, 0.23557074, 0.9700034, -0.059993733, -0.96932864, 0.23895994, 0.057446778, 0, -0.165, 0)
+
+[node name="BloodParticles" type="GPUParticles3D" parent="." unique_id=1828839718]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+emitting = false
+amount = 40
+lifetime = 0.8
+one_shot = true
+process_material = SubResource("2")

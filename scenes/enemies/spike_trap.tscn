@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://dd4sc70bco5yy"]
+
+[ext_resource type="Script" path="res://scripts/enemies/spike_trap.gd" id="1_strap"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_1"]
+top_radius = 0.0
+bottom_radius = 0.45
+height = 0.3
+
+[sub_resource type="CylinderShape3D" id="CylinderShape_1"]
+radius = 0.45
+height = 0.35
+
+[node name="SpikeTrap" type="Area3D"]
+script = ExtResource("1_strap")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
+mesh = SubResource("CylinderMesh_1")
+
+[node name="Col" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.175, 0)
+shape = SubResource("CylinderShape_1")

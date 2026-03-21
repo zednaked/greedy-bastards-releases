@@ -1,0 +1,386 @@
+[gd_scene format=3 uid="uid://main"]
+
+[ext_resource type="PackedScene" uid="uid://rena" path="res://scenes/arena/arena.tscn" id="1"]
+[ext_resource type="PackedScene" uid="uid://player" path="res://scenes/player/player.tscn" id="2"]
+[ext_resource type="PackedScene" uid="uid://goblin" path="res://scenes/enemies/goblin.tscn" id="3"]
+[ext_resource type="Script" uid="uid://cbfc8l5bp7iun" path="res://scripts/enemies/enemy_spawner.gd" id="4"]
+[ext_resource type="Script" uid="uid://ciap7s7sog8n2" path="res://scripts/hud.gd" id="5"]
+[ext_resource type="Script" uid="uid://dpwh6k64xpjik" path="res://scripts/weapon_pickup.gd" id="6"]
+[ext_resource type="PackedScene" uid="uid://d1ccccwcxd3m3" path="res://assets/models/Sword_01.fbx" id="7"]
+[ext_resource type="PackedScene" uid="uid://dj4exjrga76cr" path="res://assets/models/Ax_01.fbx" id="8"]
+[ext_resource type="PackedScene" uid="uid://dr1q42a8lnmu" path="res://assets/models/Dagger_01.fbx" id="9"]
+[ext_resource type="PackedScene" path="res://scenes/props/ground_spike01.tscn" id="10_muem4"]
+[ext_resource type="PackedScene" path="res://scenes/props/ground_spike02.tscn" id="11_dp3eg"]
+[ext_resource type="PackedScene" path="res://scenes/props/skull.tscn" id="12_0ld40"]
+[ext_resource type="PackedScene" path="res://scenes/props/sword.tscn" id="13_gqmmt"]
+[ext_resource type="PackedScene" path="res://scenes/props/pike.tscn" id="14_yc10j"]
+[ext_resource type="PackedScene" path="res://scenes/props/pillar01.tscn" id="15_jscy8"]
+[ext_resource type="PackedScene" path="res://scenes/props/pillar02.tscn" id="16_pm3ni"]
+[ext_resource type="PackedScene" path="res://scenes/props/wall_chain.tscn" id="17_y6deb"]
+[ext_resource type="PackedScene" path="res://scenes/props/hammer.tscn" id="18_gqmmt"]
+[ext_resource type="PackedScene" path="res://scenes/props/bottle_potion_health.tscn" id="19_yc10j"]
+[ext_resource type="PackedScene" path="res://scenes/props/wooden_barrel.tscn" id="20_jscy8"]
+[ext_resource type="PackedScene" path="res://scenes/props/cage.tscn" id="21_yc10j"]
+[ext_resource type="PackedScene" path="res://scenes/ui/title_overlay.tscn" id="22_title"]
+
+[sub_resource type="BoxShape3D" id="floor_shape"]
+size = Vector3(60, 0.5, 60)
+
+[sub_resource type="BoxMesh" id="floor_mesh"]
+size = Vector3(60, 0.5, 60)
+
+[sub_resource type="BoxShape3D" id="weapon_col"]
+size = Vector3(0.15, 0.5, 0.05)
+
+[node name="Main" type="Node3D" unique_id=559978064]
+
+[node name="Arena" parent="." unique_id=443239156 instance=ExtResource("1")]
+transform = Transform3D(5.5435424, 0, 0, 0, 4.9825892, 0, 0, 0, 4.242012, 0, -0.83935064, 0)
+
+[node name="Floor" type="StaticBody3D" parent="." unique_id=99887766]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.13810855, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor" unique_id=99887767]
+shape = SubResource("floor_shape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor" unique_id=99887768]
+visible = false
+mesh = SubResource("floor_mesh")
+
+[node name="Player" parent="." unique_id=704349700 instance=ExtResource("2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.23199314, 18.939817)
+slide_on_ceiling = false
+floor_constant_speed = true
+floor_snap_length = 0.35
+bob_freq = 1.92
+bob_roll = 0.075
+forward_lean = 0.045
+max_health = 15
+invincibility_time = 1.16
+dash_duration = 0.235
+
+[node name="EnemySpawner" type="Node3D" parent="." unique_id=1217919587]
+script = ExtResource("4")
+goblin_scene = ExtResource("3")
+
+[node name="Weapons" type="Node3D" parent="." unique_id=55667788]
+
+[node name="SwordPickup" type="Node3D" parent="Weapons" unique_id=11223344]
+transform = Transform3D(0.9461363, 0, -0.3237688, 0, 1, 0, 0.3237688, 0, 0.9461363, 5.665786, 0.5000019, -23.591599)
+script = ExtResource("6")
+
+[node name="WeaponMesh" parent="Weapons/SwordPickup" unique_id=1626646676 instance=ExtResource("7")]
+transform = Transform3D(1.53, 0, 0, 0, 1.53, 0, 0, 0, 1.53, 0, 0, 0)
+
+[node name="SwordCollision" type="Area3D" parent="Weapons/SwordPickup" unique_id=11223346]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Weapons/SwordPickup/SwordCollision" unique_id=11223347]
+shape = SubResource("weapon_col")
+
+[node name="PromptLabel" type="Label3D" parent="Weapons/SwordPickup" unique_id=11223348]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+modulate = Color(1, 1, 0, 1)
+text = "[ E ] Pegar Sword"
+
+[node name="AxPickup" type="Node3D" parent="Weapons" unique_id=22334455]
+transform = Transform3D(0.48571008, 0, 0.87412, 0, 1, 0, -0.87412, 0, 0.48571008, -21.319954, 1.1137825, 0)
+script = ExtResource("6")
+weapon_name = "Axe"
+
+[node name="WeaponMesh" parent="Weapons/AxPickup" unique_id=22334456 instance=ExtResource("8")]
+transform = Transform3D(-1.0048821, 0, -1.113648, 0, 1.5, 0, 1.113648, 0, -1.0048821, 0, 0, 0)
+
+[node name="AxCollision" type="Area3D" parent="Weapons/AxPickup" unique_id=22334457]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Weapons/AxPickup/AxCollision" unique_id=22334458]
+shape = SubResource("weapon_col")
+
+[node name="PromptLabel" type="Label3D" parent="Weapons/AxPickup" unique_id=22334459]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+modulate = Color(1, 1, 0, 1)
+text = "[ E ] Pegar Axe"
+
+[node name="DaggerPickup" type="Node3D" parent="Weapons" unique_id=33445566]
+transform = Transform3D(0.44644773, 0, -0.8948098, 0, 1, 0, 0.8948098, 0, 0.44644773, 21.648308, 0.5, -6.5904856)
+script = ExtResource("6")
+weapon_name = "Dagger"
+
+[node name="WeaponMesh" parent="Weapons/DaggerPickup" unique_id=33445567 instance=ExtResource("9")]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0, 0, 0)
+
+[node name="DaggerCollision" type="Area3D" parent="Weapons/DaggerPickup" unique_id=33445568]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Weapons/DaggerPickup/DaggerCollision" unique_id=33445569]
+shape = SubResource("weapon_col")
+
+[node name="PromptLabel" type="Label3D" parent="Weapons/DaggerPickup" unique_id=33445570]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+modulate = Color(1, 1, 0, 1)
+text = "[ E ] Pegar Dagger"
+
+[node name="HUD" type="CanvasLayer" parent="." unique_id=2065383411]
+script = ExtResource("5")
+
+[node name="KillCount" type="Label" parent="HUD" unique_id=294548079]
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 300.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 28
+text = "Kills: 0"
+metadata/_edit_use_anchors_ = true
+
+[node name="HealthLabel" type="Label" parent="HUD" unique_id=494548079]
+offset_left = 20.0
+offset_top = 60.0
+offset_right = 300.0
+offset_bottom = 135.0
+theme_override_font_sizes/font_size = 22
+text = "HP: 5/5"
+metadata/_edit_use_anchors_ = true
+
+[node name="WaveLabel" type="Label" parent="HUD" unique_id=594548079]
+offset_left = 20.0
+offset_top = 100.0
+offset_right = 300.0
+offset_bottom = 135.0
+theme_override_font_sizes/font_size = 22
+metadata/_edit_use_anchors_ = true
+
+[node name="AnnounceLabel" type="Label" parent="HUD" unique_id=694548079]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -80.0
+offset_right = 200.0
+offset_bottom = -10.0
+theme_override_font_sizes/font_size = 36
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ComboLabel" type="Label" parent="HUD" unique_id=894548079]
+visible = false
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -220.0
+offset_top = -80.0
+offset_right = -20.0
+offset_bottom = -40.0
+theme_override_font_sizes/font_size = 32
+horizontal_alignment = 2
+
+[node name="Vignette" type="ColorRect" parent="HUD" unique_id=794548079]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(1, 0, 0, 0)
+metadata/_edit_use_anchors_ = true
+
+[node name="ParryFlash" type="ColorRect" parent="HUD" unique_id=994548079]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(1, 1, 1, 0)
+metadata/_edit_use_anchors_ = true
+
+[node name="Crosshair" type="Label" parent="HUD" unique_id=1474114675]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -8.0
+offset_top = -8.0
+offset_right = 8.0
+offset_bottom = 8.0
+theme_override_font_sizes/font_size = 24
+text = "+"
+horizontal_alignment = 1
+vertical_alignment = 1
+metadata/_edit_use_anchors_ = true
+
+[node name="Props" type="Node3D" parent="." unique_id=100000001]
+
+[node name="groundSpike01" parent="Props" unique_id=873429174 instance=ExtResource("10_muem4")]
+transform = Transform3D(0.8587513, 0, 0, 0, 0.8587513, 0, 0, 0, 0.8587513, 6.7640963, 0.11189151, 7.9911194)
+
+[node name="groundSpike02" parent="Props" unique_id=17030594 instance=ExtResource("11_dp3eg")]
+transform = Transform3D(0.8587513, 0, 0, 0, 0.8587513, 0, 0, 0, 0.8587513, 7.6563582, 0.11189151, 7.1083035)
+
+[node name="skull" parent="Props" unique_id=805128212 instance=ExtResource("12_0ld40")]
+transform = Transform3D(-0.6952286, 0, -0.5040941, 0, 1, 0, 0.5040941, 0, -0.6952286, 8.347003, 0.11189175, 10.705568)
+
+[node name="skull3" parent="Props" unique_id=1245528887 instance=ExtResource("12_0ld40")]
+transform = Transform3D(-0.6952286, 0, -0.5040941, 0, 1, 0, 0.5040941, 0, -0.6952286, 5.586228, 0.07891369, 15.64289)
+
+[node name="skull4" parent="Props" unique_id=1946031925 instance=ExtResource("12_0ld40")]
+transform = Transform3D(-0.6952286, 0, -0.5040941, 0, 1, 0, 0.5040941, 0, -0.6952286, 4.844895, 0.121290684, 16.646446)
+
+[node name="skull5" parent="Props" unique_id=391499670 instance=ExtResource("12_0ld40")]
+transform = Transform3D(-0.5940325, 0, 0.6201443, 0, 1, 0, -0.6201443, 0, -0.5940325, -8.717164, 0.31994557, 15.296969)
+
+[node name="skull6" parent="Props" unique_id=1991257216 instance=ExtResource("12_0ld40")]
+transform = Transform3D(-0.5940325, 0, 0.6201443, 0, 1, 0, -0.6201443, 0, -0.5940325, -9.751505, 0.21222806, 14.153584)
+
+[node name="skull8" parent="Props" unique_id=1389939347 instance=ExtResource("12_0ld40")]
+transform = Transform3D(-0.5940325, 0, 0.6201443, 0, 1, 0, -0.6201443, 0, -0.5940325, -17.434507, 0.2122271, 8.282673)
+
+[node name="skull9" parent="Props" unique_id=306364769 instance=ExtResource("12_0ld40")]
+transform = Transform3D(-0.5940325, 0, 0.6201443, 0, 1, 0, -0.6201443, 0, -0.5940325, -20.006021, 0.2122271, -4.479191)
+
+[node name="skull10" parent="Props" unique_id=2097606798 instance=ExtResource("12_0ld40")]
+transform = Transform3D(0.858199, 0, 0.030793851, 0, 1, 0, -0.030793851, 0, 0.858199, -9.016598, 0.2122271, -21.271873)
+
+[node name="skull11" parent="Props" unique_id=1618570158 instance=ExtResource("12_0ld40")]
+transform = Transform3D(0.62620795, 0, 0.58763725, 0, 1, 0, -0.58763725, 0, 0.62620795, -9.589766, 1.1142781, -13.540638)
+
+[node name="skull12" parent="Props" unique_id=925276995 instance=ExtResource("12_0ld40")]
+transform = Transform3D(0.7958155, 0, -0.32269415, 0, 1, 0, 0.32269415, 0, 0.7958155, 3.328151, 0.2122271, -21.587791)
+
+[node name="skull13" parent="Props" unique_id=2070546800 instance=ExtResource("12_0ld40")]
+transform = Transform3D(0.7958155, 0, -0.32269415, 0, 1, 0, 0.32269415, 0, 0.7958155, 4.3968678, 0.2122271, -20.601809)
+
+[node name="skull16" parent="Props" unique_id=272401911 instance=ExtResource("12_0ld40")]
+transform = Transform3D(0.63186055, 0, -0.58155483, 0, 1, 0, 0.58155483, 0, 0.63186055, 12.428903, 0.2122271, -17.064447)
+
+[node name="skull17" parent="Props" unique_id=166885544 instance=ExtResource("12_0ld40")]
+transform = Transform3D(0.13763855, 0, -0.8476493, 0, 1, 0, 0.8476493, 0, 0.13763855, 19.601982, 0.2122271, -8.699472)
+
+[node name="skull18" parent="Props" unique_id=2114995565 instance=ExtResource("12_0ld40")]
+transform = Transform3D(-0.21285123, 0, -0.83195436, 0, 1, 0, 0.83195436, 0, -0.21285123, 20.254604, 0.21222806, -0.4081947)
+
+[node name="skull19" parent="Props" unique_id=35121443 instance=ExtResource("12_0ld40")]
+transform = Transform3D(-0.21285124, 0, -0.83195436, 0, 1, 0, 0.83195436, 0, -0.21285124, 21.60697, 0.21222806, 1.8739716)
+
+[node name="skull14" parent="Props" unique_id=2023402981 instance=ExtResource("12_0ld40")]
+transform = Transform3D(0.8448588, 0, 0.15384163, 0, 1, 0, -0.15384163, 0, 0.8448588, 1.8242921, 0.2122271, -22.301517)
+
+[node name="skull15" parent="Props" unique_id=2064042966 instance=ExtResource("12_0ld40")]
+transform = Transform3D(0.8448588, 0, 0.15384163, 0, 1, 0, -0.15384163, 0, 0.8448588, 1.8242921, 0.2122271, -22.301517)
+
+[node name="skull7" parent="Props" unique_id=1162451257 instance=ExtResource("12_0ld40")]
+transform = Transform3D(-0.7925024, 0, 0.3307473, 0, 1, 0, -0.3307473, 0, -0.7925024, -7.5115013, 0.3917563, 16.41061)
+
+[node name="skull2" parent="Props" unique_id=570288691 instance=ExtResource("12_0ld40")]
+transform = Transform3D(-0.6952286, 0, -0.5040941, 0, 1, 0, 0.5040941, 0, -0.6952286, 7.680689, 0.11189175, 11.610743)
+
+[node name="Sword" parent="Props" unique_id=1583204340 instance=ExtResource("13_gqmmt")]
+transform = Transform3D(-0.05899141, 0, -0.85672265, 0, 1, 0, 0.85672265, 0, -0.05899141, 3.6642609, 0.11189127, 18.967674)
+
+[node name="Sword2" parent="Props" unique_id=1319928089 instance=ExtResource("13_gqmmt")]
+transform = Transform3D(-0.05899141, 0, -0.85672265, 0, 1, 0, 0.85672265, 0, -0.05899141, -5.365399, 0.11189127, 18.965685)
+
+[node name="pike" parent="Props" unique_id=532245822 instance=ExtResource("14_yc10j")]
+transform = Transform3D(0.09033038, -0.99445236, 0, 0.8539873, 0.10518805, 0, 0, 0, 0.8587513, -4.0628443, 0.11189151, 8.644855)
+
+[node name="pillar01" parent="Props" unique_id=1105264613 instance=ExtResource("15_jscy8")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, -8.621685, 0.11189163, -1.2400548)
+
+[node name="pillar02" parent="Props" unique_id=378972081 instance=ExtResource("15_jscy8")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 4.5871496, 0.11189163, 3.014962)
+
+[node name="pillar03" parent="Props" unique_id=1238835360 instance=ExtResource("15_jscy8")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 10.557886, 0.11189163, 1.2336708)
+
+[node name="pillar04" parent="Props" unique_id=1142661191 instance=ExtResource("15_jscy8")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 13.311138, 0.11189163, -10.006262)
+
+[node name="pillar05" parent="Props" unique_id=2048412490 instance=ExtResource("15_jscy8")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, -0.8557911, 0.11189163, -17.39615)
+
+[node name="pillar06" parent="Props" unique_id=489593519 instance=ExtResource("15_jscy8")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, -9.50634, 0.11189163, -13.377656)
+
+[node name="pillar07" parent="Props" unique_id=728888354 instance=ExtResource("16_pm3ni")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, -3.889411, 0.11189151, -0.1604774)
+
+[node name="pillar09" parent="Props" unique_id=1191728297 instance=ExtResource("16_pm3ni")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, -3.889411, 1.1178936, -0.1604774)
+
+[node name="pillar08" parent="Props" unique_id=410369766 instance=ExtResource("16_pm3ni")]
+transform = Transform3D(2.029, 0, 0, 0, 2.362, 0, 0, 0, 2.029, 2.1025553, 0.21817017, -4.3096175)
+
+[node name="pillar10" parent="Props" unique_id=1361772941 instance=ExtResource("16_pm3ni")]
+transform = Transform3D(2.029, 0, 0, 0, 2.362, 0, 0, 0, 2.029, 2.1025553, 1.2500916, -4.3096175)
+
+[node name="pillar11" parent="Props" unique_id=294819417 instance=ExtResource("16_pm3ni")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 4.0309267, 0.11189127, -13.639662)
+
+[node name="pillar12" parent="Props" unique_id=1836737516 instance=ExtResource("16_pm3ni")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 4.0309267, 1.1438127, -13.639662)
+
+[node name="pillar13" parent="Props" unique_id=666633367 instance=ExtResource("16_pm3ni")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 14.2693205, 0.11189127, 5.449669)
+
+[node name="pillar14" parent="Props" unique_id=940051634 instance=ExtResource("16_pm3ni")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 14.2693205, 1.1438127, 5.449669)
+
+[node name="pillar15" parent="Props" unique_id=2090948984 instance=ExtResource("16_pm3ni")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, -11.120124, 0.11189127, 8.981181)
+
+[node name="pillar16" parent="Props" unique_id=1187081705 instance=ExtResource("16_pm3ni")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, -11.120124, 1.1438127, 8.981181)
+
+[node name="wallChain" parent="Props" unique_id=1551104494 instance=ExtResource("17_y6deb")]
+transform = Transform3D(-0.01539194, -0.54428816, 0.72024053, 0.8586133, -0.009757186, 0.0129114, 0, 0.83884156, 0.4674832, 12.278326, 0.11189175, -1.6284655)
+
+[node name="Sword3" parent="Props" unique_id=1394131526 instance=ExtResource("13_gqmmt")]
+transform = Transform3D(0.051976703, -0.9981666, 0, 0.8571769, 0.06052591, 0, 0, 0, 0.8587513, -5.0022974, 0.11189151, -7.1420918)
+
+[node name="hammer" parent="Props" unique_id=1692809654 instance=ExtResource("18_gqmmt")]
+transform = Transform3D(0.8587513, 0, 0, 0, 0.13950151, 0.8503543, 0, -0.99022186, 0.1197971, 5.1066775, 0.11189127, -12.486862)
+
+[node name="bottlePotionHealth" parent="Props" unique_id=202011483 instance=ExtResource("19_yc10j")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 13.238186, 1.1501393, -9.933877)
+
+[node name="wallChain2" parent="Props" unique_id=1721220236 instance=ExtResource("17_y6deb")]
+transform = Transform3D(0.047173597, -0.99849004, 0, 0.8574546, 0.05493278, 0, 0, 0, 0.8587513, 7.5667605, 0.11189127, -21.17512)
+
+[node name="woodenBarrel" parent="Props" unique_id=1419123968 instance=ExtResource("20_jscy8")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 9.979613, 0.11189127, -20.738144)
+
+[node name="woodenBarrel2" parent="Props" unique_id=1881885010 instance=ExtResource("20_jscy8")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 9.194181, 0.11189127, -21.384012)
+
+[node name="woodenBarrel3" parent="Props" unique_id=2017733607 instance=ExtResource("20_jscy8")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 11.098617, 0.11189079, -21.549936)
+
+[node name="woodenBarrel4" parent="Props" unique_id=923949955 instance=ExtResource("20_jscy8")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 20.157116, 0.11189151, 7.993526)
+
+[node name="woodenBarrel5" parent="Props" unique_id=1993564574 instance=ExtResource("20_jscy8")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 21.12144, 0.11189151, 7.341971)
+
+[node name="woodenBarrel6" parent="Props" unique_id=1566323918 instance=ExtResource("20_jscy8")]
+transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 20.065226, 0.11189175, 9.1274185)
+
+[node name="cage" parent="Props" unique_id=498650748 instance=ExtResource("21_yc10j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20.413227, 0.11189079, 9.369225)
+
+[node name="cage2" parent="Props" unique_id=830813873 instance=ExtResource("21_yc10j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22.26676, 0.11189079, -3.9158)
+
+[node name="cage3" parent="Props" unique_id=310894617 instance=ExtResource("21_yc10j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.226412, 0.11189079, -13.2827215)
+
+[node name="cage4" parent="Props" unique_id=754685777 instance=ExtResource("21_yc10j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.215889, 0.11189079, -19.470478)
+
+[node name="cage5" parent="Props" unique_id=384331331 instance=ExtResource("21_yc10j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.4235535, 0.11189079, -22.911697)
+
+[node name="cage6" parent="Props" unique_id=880190730 instance=ExtResource("21_yc10j")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.764809, 0.11189079, -20.248299)
+
+[node name="TitleOverlay" parent="." unique_id=893056652 instance=ExtResource("22_title")]
+
+[editable path="Player"]

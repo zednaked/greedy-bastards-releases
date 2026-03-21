@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://u4us1w1d1ljv"]
+
+[ext_resource type="PackedScene" uid="uid://bwe8aeh4wfq1j" path="res://assets/models/props/chestA.fbx" id="1_e1qkp"]
+[ext_resource type="Texture2D" uid="uid://cogp2g5amccyt" path="res://assets/models/props/chestA.png" id="2_md7cs"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_xd1da"]
+albedo_texture = ExtResource("2_md7cs")
+texture_filter = 0
+roughness = 1.0
+
+[node name="chestA" unique_id=2117293777 instance=ExtResource("1_e1qkp")]
+
+[node name="chestA" parent="." index="0" unique_id=493641429]
+transform = Transform3D(1.6238579, 0, 0, 0, 1.6238579, 0, 0, 0, 1.6238579, 0, 0, 0)
+surface_material_override/0 = SubResource("StandardMaterial3D_xd1da")

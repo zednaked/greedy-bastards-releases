@@ -1,0 +1,49 @@
+[gd_scene load_steps=8 format=3 uid="uid://chest_econ01"]
+
+[ext_resource type="Script" path="res://scripts/economy/chest.gd" id="1_chest"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_body"]
+size = Vector3(0.9, 0.55, 0.65)
+
+[sub_resource type="StandardMaterial3D" id="Mat_body"]
+albedo_color = Color(0.45, 0.28, 0.12, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="BoxMesh_lid"]
+size = Vector3(0.9, 0.28, 0.65)
+
+[sub_resource type="StandardMaterial3D" id="Mat_lid"]
+albedo_color = Color(0.52, 0.33, 0.15, 1)
+roughness = 0.8
+emission_enabled = true
+emission = Color(0.5, 0.35, 0.0, 1)
+emission_energy_multiplier = 0.6
+
+[sub_resource type="BoxMesh" id="BoxMesh_band"]
+size = Vector3(0.92, 0.07, 0.67)
+
+[sub_resource type="StandardMaterial3D" id="Mat_band"]
+albedo_color = Color(0.75, 0.6, 0.1, 1)
+metallic = 0.9
+roughness = 0.2
+
+[node name="Chest" type="Node3D"]
+script = ExtResource("1_chest")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.275, 0)
+mesh = SubResource("BoxMesh_body")
+surface_material_override/0 = SubResource("Mat_body")
+
+[node name="Lid" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0.325)
+
+[node name="LidMesh" type="MeshInstance3D" parent="Lid"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.14, -0.325)
+mesh = SubResource("BoxMesh_lid")
+surface_material_override/0 = SubResource("Mat_lid")
+
+[node name="Band" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.275, 0)
+mesh = SubResource("BoxMesh_band")
+surface_material_override/0 = SubResource("Mat_band")

@@ -1,0 +1,28 @@
+[gd_scene load_steps=5 format=3 uid="uid://coin_econ01"]
+
+[ext_resource type="Script" path="res://scripts/economy/coin.gd" id="1_coin"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_1"]
+radius = 0.13
+height = 0.26
+
+[sub_resource type="StandardMaterial3D" id="Mat_1"]
+albedo_color = Color(1, 0.82, 0.1, 1)
+metallic = 0.8
+roughness = 0.2
+emission_enabled = true
+emission = Color(0.8, 0.6, 0.0, 1)
+emission_energy_multiplier = 1.5
+
+[sub_resource type="SphereShape3D" id="SphereShape_1"]
+radius = 0.13
+
+[node name="Coin" type="RigidBody3D"]
+script = ExtResource("1_coin")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("SphereMesh_1")
+surface_material_override/0 = SubResource("Mat_1")
+
+[node name="Col" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape_1")

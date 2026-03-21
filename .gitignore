@@ -1,0 +1,12 @@
+# Godot 4 generated files
+.godot/
+
+# Import cache
+.import/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor config (keep CLAUDE.md but ignore local overrides)
+.claude/

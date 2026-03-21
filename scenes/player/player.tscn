@@ -1,0 +1,54 @@
+[gd_scene format=3 uid="uid://player"]
+
+[ext_resource type="Script" uid="uid://dtrmfnqkxx103" path="res://scripts/player/player_controller.gd" id="1"]
+[ext_resource type="Script" uid="uid://btbio5d3rb48o" path="res://scripts/player/sword_attack.gd" id="2"]
+[ext_resource type="PackedScene" uid="uid://cq3pilndiufdr" path="res://assets/models/Sword_01.glb" id="2_gmlin"]
+
+[sub_resource type="CapsuleShape3D" id="1"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="BoxShape3D" id="2"]
+size = Vector3(0.61744994, 0.8106445, 0.58063966)
+
+[node name="Player" type="CharacterBody3D" unique_id=1864464396]
+script = ExtResource("1")
+default_weapon_scene = ExtResource("2_gmlin")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=631052571]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("1")
+
+[node name="Head" type="Node3D" parent="." unique_id=263787791]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+
+[node name="Camera3D" type="Camera3D" parent="Head" unique_id=527529359]
+current = true
+fov = 66.5
+
+[node name="WeaponPivot" type="Node3D" parent="Head" unique_id=507450414]
+transform = Transform3D(0.93800133, -0.065232635, -0.34043834, 0.1057087, 0.9891812, 0.101715945, 0.33012003, -0.131397, 0.934749, 0.35, -0.30000007, -0.6)
+script = ExtResource("2")
+s1_pull_rot_x = 29.86
+s1_hit_z = -0.845
+s1_hit_rot_x = -85.795
+s1_t_pull = 0.225
+s1_t_hit = 0.155
+s1_t_return = 0.35
+s2_raise_y = 0.58
+s2_raise_rot_x = 115.265
+s2_slam_y = 0.075
+s2_slam_rot_x = -73.095
+s2_t_raise = 0.28
+s2_t_slam = 0.23
+
+[node name="SwordMesh" type="Node3D" parent="Head/WeaponPivot" unique_id=814228862]
+
+[node name="SwordHitbox" type="Area3D" parent="Head/WeaponPivot" unique_id=1151957303]
+transform = Transform3D(-0.85042906, 0.70398843, -0.73066616, 0.13488422, 2.7071407, 0.2839492, 0.7783358, 0.3000524, -0.84755206, 0, 0, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Head/WeaponPivot/SwordHitbox" unique_id=1217920453]
+transform = Transform3D(1.0000159, 5.9604645e-08, 6.2584877e-07, -1.0896474e-07, 0.9999999, -7.636845e-08, -1.7940998e-05, -1.4901161e-08, 1.0000024, 0.100783765, 0.39467758, 0.08843991)
+shape = SubResource("2")
+
+[node name="SwingSound" type="AudioStreamPlayer3D" parent="Head/WeaponPivot" unique_id=497790528]
