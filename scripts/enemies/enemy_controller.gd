@@ -227,6 +227,10 @@ var _sep_frame: int = 0
 # Throttle de animação esqueletal — roda a cada 2 frames
 var _anim_frame: int = 0
 
+# ─── Watchdog — Anti-freeze ───────────────────────────────────────────────────
+var _freeze_watch_timer: float = 0.0
+var _freeze_watch_pos:   Vector3 = Vector3.ZERO
+
 # ─── Sistema P — Squash & Stretch Jiggle ─────────────────────────────────────
 var _jiggle_scale      := Vector3.ONE
 var _jiggle_vel        := Vector3.ZERO
@@ -587,6 +591,24 @@ func _physics_process(delta: float) -> void:
 					_spawn_blood_decal(0.18, 0.5)
 			move_and_slide()
 			return
+
+	# Watchdog: se o goblin não se mover por 2s enquanto deveria estar em movimento,
+	# força reset de todos os estados de bloqueio (previne wave travada).
+	if not is_dead:
+		_freeze_watch_timer += delta
+		if _freeze_watch_timer >= 2.0:
+			var moved := global_position.distance_to(_freeze_watch_pos)
+			_freeze_watch_pos = global_position
+			_freeze_watch_timer = 0.0
+			if moved < 0.4 and (is_knocked or is_recovering or is_stumbling or is_feinting):
+				is_knocked    = false
+				is_recovering = false
+				is_stumbling  = false
+				is_feinting   = false
+				velocity      = Vector3.ZERO
+				# Se estiver no ar, desce para y=0 (chão padrão da arena)
+				if not is_on_floor():
+					global_position.y = 0.0
 
 	if is_dead:
 		return  # física parada — set_physics_process(false) cuida disso
