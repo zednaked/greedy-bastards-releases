@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://bdga46kar0vcc"
 path.s3tc="res://.godot/imported/Dagger_01_FantasyWeapons_Texture_01.png-ed09f1e375d20e5b9c90e1ba08d40495.s3tc.ctex"
+path.etc2="res://.godot/imported/Dagger_01_FantasyWeapons_Texture_01.png-ed09f1e375d20e5b9c90e1ba08d40495.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/Dagger_01_FantasyWeapons_Texture_01.png"
-dest_files=["res://.godot/imported/Dagger_01_FantasyWeapons_Texture_01.png-ed09f1e375d20e5b9c90e1ba08d40495.s3tc.ctex"]
+dest_files=["res://.godot/imported/Dagger_01_FantasyWeapons_Texture_01.png-ed09f1e375d20e5b9c90e1ba08d40495.s3tc.ctex", "res://.godot/imported/Dagger_01_FantasyWeapons_Texture_01.png-ed09f1e375d20e5b9c90e1ba08d40495.etc2.ctex"]
 
 [params]
 

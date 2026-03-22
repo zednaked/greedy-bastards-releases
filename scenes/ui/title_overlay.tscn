@@ -1,19 +1,19 @@
-[gd_scene format=3 uid="uid://title_overlay"]
+[gd_scene format=3 uid="uid://xw2juggij0"]
 
-[ext_resource type="Script" path="res://scripts/ui/title_overlay.gd" id="1"]
+[ext_resource type="Script" uid="uid://1l7t3oeup2w6" path="res://scripts/ui/title_overlay.gd" id="1"]
 
-[node name="TitleOverlay" type="CanvasLayer"]
+[node name="TitleOverlay" type="CanvasLayer" unique_id=1000780957]
 layer = 10
 script = ExtResource("1")
 
-[node name="Dim" type="ColorRect" parent="."]
+[node name="Dim" type="ColorRect" parent="." unique_id=2048619927]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 color = Color(0.04, 0.02, 0.02, 0.72)
 
-[node name="Panel" type="VBoxContainer" parent="."]
+[node name="Panel" type="VBoxContainer" parent="." unique_id=610209661]
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
@@ -23,32 +23,40 @@ offset_left = -220.0
 offset_top = -180.0
 offset_right = 220.0
 offset_bottom = 180.0
-theme_override_constants/separation = 28
+theme_override_constants/separation = 13
 
-[node name="Title" type="Label" parent="Panel"]
+[node name="Title" type="Label" parent="Panel" unique_id=1447665123]
 layout_mode = 2
 theme_override_font_sizes/font_size = 62
 text = "GREEDY BASTARDS"
 horizontal_alignment = 1
 
-[node name="Subtitle" type="Label" parent="Panel"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 17
+[node name="Subtitle" type="Label" parent="Panel" unique_id=1146105348]
 modulate = Color(0.85, 0.52, 0.28, 1)
-text = "sobreviva à arena"
+layout_mode = 2
+theme_override_font_sizes/font_size = 47
+text = "Arena"
 horizontal_alignment = 1
 
-[node name="Spacer" type="Control" parent="Panel"]
-layout_mode = 2
+[node name="Spacer" type="Control" parent="Panel" unique_id=263308697]
 custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
 
-[node name="StartBtn" type="Button" parent="Panel"]
+[node name="StartBtn" type="Button" parent="Panel" unique_id=1348295789]
 layout_mode = 2
 theme_override_font_sizes/font_size = 30
 text = "ENTRAR NA ARENA"
 
-[node name="QuitBtn" type="Button" parent="Panel"]
+[node name="QuitBtn" type="Button" parent="Panel" unique_id=1540036326]
+modulate = Color(0.65, 0.65, 0.65, 1)
 layout_mode = 2
 theme_override_font_sizes/font_size = 19
-modulate = Color(0.65, 0.65, 0.65, 1)
 text = "Sair"
+
+[node name="Subtitle2" type="Label" parent="Panel" unique_id=1850947773]
+modulate = Color(0.85, 0.52, 0.28, 1)
+layout_mode = 2
+theme_override_font_sizes/font_size = 21
+text = "By ZeD"
+horizontal_alignment = 1
+vertical_alignment = 2

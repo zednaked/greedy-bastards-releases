@@ -35,7 +35,7 @@ func _on_body_entered(body: Node3D) -> void:
 	if body.is_in_group("enemies"):
 		return
 	if body.has_method("take_damage"):
-		var push: Vector3 = _velocity.normalized() * 12.0
+		var push: Vector3 = (_velocity.normalized() if _velocity.length_squared() > 0.01 else Vector3.FORWARD) * 12.0
 		push.y = 2.5
 		body.take_damage(damage, push)
 	queue_free()

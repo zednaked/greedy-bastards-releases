@@ -13,6 +13,28 @@ func _ready() -> void:
 	cs.shape = _make_cylinder_wall(wall_radius, wall_height, segments)
 	sb.add_child(cs)
 
+	_apply_floor_shader()
+
+func _apply_floor_shader() -> void:
+	var model := get_parent().get_node_or_null("ArenaModel")
+	if model == null:
+		return
+	# O mesh "Arena" dentro do GLB importado é o chão principal
+	var floor_node := model.find_child("Arena", true, false) as MeshInstance3D
+	if floor_node == null:
+		return
+	# Preserva a textura/cor original — só deixa o chão úmido (baixo roughness, alto specular)
+	for s in floor_node.mesh.get_surface_count():
+		var orig := floor_node.get_active_material(s)
+		if orig == null:
+			continue
+		var mat := orig.duplicate() as Material
+		if mat is StandardMaterial3D:
+			var std := mat as StandardMaterial3D
+			std.roughness = 0.06
+			std.metallic_specular = 0.9
+		floor_node.set_surface_override_material(s, mat)
+
 func _make_cylinder_wall(radius: float, height: float, segs: int) -> ConcavePolygonShape3D:
 	var shape := ConcavePolygonShape3D.new()
 	var faces := PackedVector3Array()

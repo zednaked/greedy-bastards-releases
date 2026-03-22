@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://c6v34g6nbvljy"
 path.s3tc="res://.godot/imported/boxB.png-dad580f5837e465f1b7683090dc09828.s3tc.ctex"
+path.etc2="res://.godot/imported/boxB.png-dad580f5837e465f1b7683090dc09828.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/models/props/boxB.png"
-dest_files=["res://.godot/imported/boxB.png-dad580f5837e465f1b7683090dc09828.s3tc.ctex"]
+dest_files=["res://.godot/imported/boxB.png-dad580f5837e465f1b7683090dc09828.s3tc.ctex", "res://.godot/imported/boxB.png-dad580f5837e465f1b7683090dc09828.etc2.ctex"]
 
 [params]
 

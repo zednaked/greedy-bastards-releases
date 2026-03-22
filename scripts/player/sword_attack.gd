@@ -68,11 +68,22 @@ var _attack_id      := 0
 var _current_tween: Tween = null
 var _hit_bodies: Array = []
 
-var _buffered_attack: String = ""
+var _attack_buffered: bool = false
 var _buffer_age: float = 0.0
 
 var _lunge_timer: float = 0.0
 var _lunge_dir: Vector3 = Vector3.ZERO
+
+var _combo_count: int = 0
+var _combo_timer: float = 0.0
+const COMBO_RESET_TIME := 1.2
+
+var _click_combo: int = 0
+var _click_timer: float = 0.0
+const CLICK_COMBO_RESET_TIME := 0.9
+
+# ─── Sword glow ───────────────────────────────────────────────────────────────
+var _sword_glow_mat: ShaderMaterial = null
 
 # ─── Arremesso ────────────────────────────────────────────────────────────────
 var has_weapon: bool = true
@@ -83,6 +94,25 @@ func _ready() -> void:
 	hitbox.monitoring = false
 	spring_pos = REST_POS
 	player = get_parent().get_parent()
+	_setup_sword_glow()
+
+func _setup_sword_glow() -> void:
+	var shader := load("res://shaders/sword_glow.gdshader") as Shader
+	if shader == null:
+		return
+	_sword_glow_mat = ShaderMaterial.new()
+	_sword_glow_mat.shader = shader
+	# Aplica como next_pass em cada surface de cada MeshInstance3D filha da espada
+	for mi in weapon_mesh.find_children("*", "MeshInstance3D", true, false):
+		var mesh_inst := mi as MeshInstance3D
+		if mesh_inst.mesh == null:
+			continue
+		for s in mesh_inst.mesh.get_surface_count():
+			var orig := mesh_inst.get_active_material(s)
+			if orig != null:
+				orig.next_pass = _sword_glow_mat
+			else:
+				mesh_inst.set_surface_override_material(s, _sword_glow_mat)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
@@ -103,14 +133,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			if can_fire:
 				if event.button_index == MOUSE_BUTTON_LEFT:
 					_cancel_flick()
-					_trigger_click_attack("thrust")
+					_trigger_click_attack()
 			else:
 				if event.button_index == MOUSE_BUTTON_LEFT:
-					_buffered_attack = "thrust"
+					_attack_buffered = true
 					_buffer_age = 0.0
 		else:
 			if event.button_index == MOUSE_BUTTON_LEFT:
-				_buffered_attack = "thrust"
+				_attack_buffered = true
 				_buffer_age = 0.0
 
 	# E para pegar a espada arremessada
@@ -121,16 +151,23 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	attack_cooldown = maxf(0.0, attack_cooldown - delta)
+	if _combo_count > 0:
+		_combo_timer -= delta
+		if _combo_timer <= 0.0:
+			_combo_count = 0
+	if _click_combo > 0:
+		_click_timer -= delta
+		if _click_timer <= 0.0:
+			_click_combo = 0
 
-	if _buffered_attack != "" and has_weapon:
+	if _attack_buffered and has_weapon:
 		_buffer_age += delta
 		if _buffer_age > attack_buffer_window:
-			_buffered_attack = ""
+			_attack_buffered = false
 		elif attack_cooldown <= 0.0 and not is_attacking:
-			var a := _buffered_attack
-			_buffered_attack = ""
+			_attack_buffered = false
 			_cancel_flick()
-			_trigger_click_attack(a)
+			_trigger_click_attack()
 
 	if _lunge_timer > 0.0 and player:
 		_lunge_timer -= delta
@@ -207,6 +244,8 @@ func _throw_sword() -> void:
 	_thrown.global_transform = weapon_mesh.global_transform
 
 	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
 	var dir := -cam.global_transform.basis.z
 	_thrown.linear_velocity  = dir * throw_speed
 	_thrown.angular_velocity = Vector3(randf_range(-10.0, 10.0), 0.0, randf_range(-4.0, 4.0))
@@ -219,7 +258,7 @@ func _throw_sword() -> void:
 	)
 
 	# Cleanup de segurança após 30s
-	get_tree().create_timer(30.0).timeout.connect(func():
+	get_tree().create_timer(30.0, true).timeout.connect(func():
 		if is_instance_valid(_thrown):
 			_thrown.queue_free()
 		_thrown = null
@@ -298,12 +337,17 @@ func _update_spring(delta: float) -> void:
 
 # ─── Ataques ──────────────────────────────────────────────────────────────────
 
-func _trigger_click_attack(type: String) -> void:
+func _trigger_click_attack() -> void:
 	if not has_weapon: return
-	match type:
-		"thrust":   _do_thrust()
-		"overhead": _do_overhead()
+	_click_combo = (_click_combo % 4) + 1
+	_click_timer = CLICK_COMBO_RESET_TIME
+	match _click_combo:
+		1: _do_thrust()
+		2: _do_backhand()
+		3: _do_overhead()
+		4: _do_pommel_strike()
 
+# ── Ataque 1: Estocada ─────────────────────────────────────────────────────
 func _do_thrust() -> void:
 	_begin_attack()
 	var my_id := _attack_id
@@ -329,6 +373,15 @@ func _do_thrust() -> void:
 	_current_tween.parallel().tween_property(weapon_mesh, "rotation", REST_ROT, s1_t_return)
 	_current_tween.finished.connect(func(): _on_swing_done(my_id), CONNECT_ONE_SHOT)
 
+# ── Ataque 2: Contragolpe com o reverso ────────────────────────────────────
+func _do_backhand() -> void:
+	var wind_pos   := REST_POS + Vector3(-0.24, 0.04, 0.04)
+	var wind_rot   := REST_ROT + Vector3(0.0, 0.0, deg_to_rad(-35.0))
+	var strike_pos := REST_POS + Vector3(0.32, 0.02, -0.06)
+	var strike_rot := REST_ROT + Vector3(deg_to_rad(-10.0), 0.0, deg_to_rad(55.0))
+	_do_swing(strike_pos, strike_rot, 0.055, 0.09, wind_pos, wind_rot)
+
+# ── Ataque 3: Overhead slam ────────────────────────────────────────────────
 func _do_overhead() -> void:
 	_begin_attack()
 	_lunge_timer = 0.0
@@ -355,12 +408,94 @@ func _do_overhead() -> void:
 	_current_tween.parallel().tween_property(weapon_mesh, "rotation", REST_ROT, s2_t_return)
 	_current_tween.finished.connect(func(): _on_swing_done(my_id), CONNECT_ONE_SHOT)
 
+# ── Ataque 4: Golpe com a empunhadura (pommel) ─────────────────────────────
+func _do_pommel_strike() -> void:
+	_lunge_timer = 0.0
+	var raise_pos := REST_POS + Vector3(0.06, 0.22, 0.06)
+	var raise_rot := REST_ROT + Vector3(deg_to_rad(60.0), 0.0, deg_to_rad(-20.0))
+	var hit_pos   := REST_POS + Vector3(0.04, -0.08, -0.10)
+	var hit_rot   := REST_ROT + Vector3(deg_to_rad(-20.0), 0.0, deg_to_rad(10.0))
+	_do_swing(hit_pos, hit_rot, 0.05, 0.10, raise_pos, raise_rot)
+
 func _trigger_attack(dir: Vector2) -> void:
 	if not has_weapon: return
+	_combo_count += 1
+	_combo_timer = COMBO_RESET_TIME
 	var sx := signf(dir.x) if absf(dir.x) > 0.1 else 1.0
-	var end_pos := REST_POS + Vector3(-sx * 0.4, 0.0, 0.0)
-	var end_rot := Vector3(0.0, 0.0, sx * deg_to_rad(-60.0))
-	_do_swing(end_pos, end_rot, 0.05, 0.07)
+	var sy := signf(dir.y) if absf(dir.y) > 0.1 else 1.0
+	if _combo_count >= 3:
+		_combo_count = 0
+		_do_spin_finisher()
+		return
+	var ax := absf(dir.x)
+	var ay := absf(dir.y)
+	if ay > ax * 1.4:
+		if dir.y < 0.0:
+			_do_rising_slash(sx)
+		else:
+			_do_slam_slash(sx)
+	elif ax > ay * 1.4:
+		_do_horizontal_slash(sx)
+	else:
+		_do_diagonal_slash(sx, sy)
+
+func _do_horizontal_slash(sx: float) -> void:
+	var start_pos := REST_POS + Vector3(sx * 0.22, 0.02, 0.0)
+	var start_rot := REST_ROT + Vector3(0.0, 0.0, sx * deg_to_rad(30.0))
+	var end_pos   := REST_POS + Vector3(-sx * 0.40, 0.0, 0.0)
+	var end_rot   := REST_ROT + Vector3(0.0, 0.0, sx * deg_to_rad(-58.0))
+	_do_swing(end_pos, end_rot, 0.05, 0.08, start_pos, start_rot)
+
+func _do_rising_slash(sx: float) -> void:
+	var start_pos := REST_POS + Vector3(sx * 0.14, -0.14, 0.05)
+	var start_rot := REST_ROT + Vector3(deg_to_rad(22.0), 0.0, sx * deg_to_rad(18.0))
+	var end_pos   := REST_POS + Vector3(-sx * 0.18, 0.22, -0.04)
+	var end_rot   := REST_ROT + Vector3(deg_to_rad(-54.0), 0.0, sx * deg_to_rad(-38.0))
+	_do_swing(end_pos, end_rot, 0.06, 0.09, start_pos, start_rot)
+
+func _do_slam_slash(sx: float) -> void:
+	var start_pos := REST_POS + Vector3(sx * 0.08, 0.26, 0.06)
+	var start_rot := REST_ROT + Vector3(deg_to_rad(44.0), 0.0, 0.0)
+	var end_pos   := REST_POS + Vector3(-sx * 0.10, -0.12, -0.04)
+	var end_rot   := REST_ROT + Vector3(deg_to_rad(-78.0), 0.0, sx * deg_to_rad(-22.0))
+	_do_swing(end_pos, end_rot, 0.055, 0.09, start_pos, start_rot)
+
+func _do_diagonal_slash(sx: float, sy: float) -> void:
+	var start_pos := REST_POS + Vector3(sx * 0.18, -sy * 0.12, 0.02)
+	var start_rot := REST_ROT + Vector3(-sy * deg_to_rad(16.0), 0.0, sx * deg_to_rad(22.0))
+	var end_pos   := REST_POS + Vector3(-sx * 0.32, sy * 0.18, -0.02)
+	var end_rot   := REST_ROT + Vector3(sy * deg_to_rad(-50.0), 0.0, sx * deg_to_rad(-52.0))
+	_do_swing(end_pos, end_rot, 0.05, 0.08, start_pos, start_rot)
+
+func _do_spin_finisher() -> void:
+	_begin_attack()
+	var my_id := _attack_id
+	# Wind up: pull back-right and up
+	var wind_pos  := REST_POS + Vector3(0.18, 0.20, 0.10)
+	var wind_rot  := REST_ROT + Vector3(deg_to_rad(32.0), 0.0, deg_to_rad(25.0))
+	# Wide sweep across to far left
+	var sweep_pos := REST_POS + Vector3(-0.48, 0.04, -0.04)
+	var sweep_rot := REST_ROT + Vector3(deg_to_rad(-18.0), 0.0, deg_to_rad(-72.0))
+
+	weapon_mesh.position = wind_pos
+	weapon_mesh.rotation = wind_rot
+
+	_current_tween = create_tween()
+	_current_tween.tween_interval(0.07)
+	_current_tween.tween_callback(func(): hitbox.monitoring = true)
+	_current_tween.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+	_current_tween.tween_property(weapon_mesh, "position", sweep_pos, 0.065)
+	_current_tween.parallel().tween_property(weapon_mesh, "rotation", sweep_rot, 0.065)
+	_current_tween.parallel().tween_property(hitbox, "position", sweep_pos, 0.065)
+	_current_tween.tween_callback(func(): hitbox.monitoring = false; hitbox.position = Vector3.ZERO)
+	_current_tween.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_CUBIC)
+	_current_tween.tween_property(weapon_mesh, "position", REST_POS, 0.12)
+	_current_tween.parallel().tween_property(weapon_mesh, "rotation", REST_ROT, 0.12)
+	_current_tween.finished.connect(func(): _on_swing_done(my_id), CONNECT_ONE_SHOT)
+	# Extra screen punch for spin finisher
+	if player:
+		if player.has_method("add_trauma"):
+			player.add_trauma(0.20)
 
 func _apply_lunge() -> void:
 	if player == null:
@@ -384,14 +519,21 @@ func _begin_attack() -> void:
 		var ft := create_tween()
 		ft.tween_property(cam, "fov", cam.fov + 7.0, 0.025).set_ease(Tween.EASE_OUT)
 		ft.tween_property(cam, "fov", 90.0, 0.18).set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_CUBIC)
+	# Sword glow — acende no ataque
+	if _sword_glow_mat:
+		_sword_glow_mat.set_shader_parameter("emit_energy", 4.5)
+	# Post-process aberração de ataque
+	if has_node("/root/ScreenFX"):
+		get_node("/root/ScreenFX").trigger_attack()
 
-func _do_swing(end_pos: Vector3, end_rot: Vector3, t_out: float = 0.10, t_back: float = 0.22) -> void:
+func _do_swing(end_pos: Vector3, end_rot: Vector3, t_out: float = 0.10, t_back: float = 0.22,
+		start_pos: Vector3 = REST_POS, start_rot: Vector3 = REST_ROT) -> void:
 	_begin_attack()
 	var my_id := _attack_id
 
 	hitbox.monitoring = true
-	weapon_mesh.position = REST_POS
-	weapon_mesh.rotation = REST_ROT
+	weapon_mesh.position = start_pos
+	weapon_mesh.rotation = start_rot
 
 	_current_tween = create_tween()
 	_current_tween.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
@@ -413,6 +555,11 @@ func _on_swing_done(attack_id: int) -> void:
 	_hit_bodies.clear()
 	spring_pos = REST_POS
 	spring_vel = Vector3.ZERO
+	# Fade sword glow back out
+	if _sword_glow_mat:
+		var gt := create_tween()
+		gt.tween_method(func(v: float): _sword_glow_mat.set_shader_parameter("emit_energy", v),
+			_sword_glow_mat.get_shader_parameter("emit_energy"), 0.0, 0.35)
 
 func _on_hit(body: Node3D) -> void:
 	if body == player:
@@ -457,6 +604,8 @@ func _on_hit(body: Node3D) -> void:
 	if is_parry:
 		if hud and hud.has_method("flash_parry"):
 			hud.flash_parry()
+		if has_node("/root/ScreenFX"):
+			get_node("/root/ScreenFX").trigger_parry()
 	else:
 		if hud and hud.has_method("flash_hit"):
 			hud.flash_hit(is_kill)

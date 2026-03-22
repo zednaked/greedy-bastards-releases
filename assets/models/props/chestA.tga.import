@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://d0xinjwcacofp"
 path.s3tc="res://.godot/imported/chestA.tga-ea8c2ad308c2ec044daed73d6e2e47b3.s3tc.ctex"
+path.etc2="res://.godot/imported/chestA.tga-ea8c2ad308c2ec044daed73d6e2e47b3.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/models/props/chestA.tga"
-dest_files=["res://.godot/imported/chestA.tga-ea8c2ad308c2ec044daed73d6e2e47b3.s3tc.ctex"]
+dest_files=["res://.godot/imported/chestA.tga-ea8c2ad308c2ec044daed73d6e2e47b3.s3tc.ctex", "res://.godot/imported/chestA.tga-ea8c2ad308c2ec044daed73d6e2e47b3.etc2.ctex"]
 
 [params]
 

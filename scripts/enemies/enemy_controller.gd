@@ -99,15 +99,38 @@ var charge_speed_mult: float = 2.5
 var charge_knockback: float = 5.5
 var _circling_time: float = 0.0
 
-# ─── Sistema L — Taunt ────────────────────────────────────────────────────────
-const TAUNT_TEXTS: Array[String] = [
-	"huehuehue!", "vem cá, covarde!", "aaaarrgh!", "prepare-se!",
-	"foge não!", "eheheheh!", "toma!", "você vai morrer!",
-]
+# ─── Sistema L — Taunt / Speech ───────────────────────────────────────────────
+const _SPEECH_DB: Dictionary = {
+	"berserk":         ["SÓ EU CONTRA TODOS!!!", "NÃO VOU FUGIR!", "VENHA, COVARDE!!!", "VOCÊS NÃO ME PEGAM!!!"],
+	"rage":            ["VINGANÇA!!!", "POR MEU CAMARADA!!!", "VOCÊ VAI PAGAR!!!", "AAARRR!!!"],
+	"player_low":      ["quase... quase...", "agonizando! hehehe!", "só mais um pouquinho!", "tá fraco!"],
+	"outnumber":       ["somos muitos!", "não tem escapatória!", "cerquem ele!", "você tá rodeado!"],
+	"leader":          ["eu comando aqui!", "sigam-me!!!", "pela horda!", "atacar!!!"],
+	"idle":            ["huehuehue!", "vem cá, covarde!", "prepare-se!", "foge não!", "eheheheh!", "você vai morrer!"],
+	"howl":            ["AAAAOOOO!!!", "AAAAAUUUU!!!", "OWWWWL!!!"],
+	"block":           ["bloqueei!", "que tentativa!", "fácil!", "errou!"],
+	"guard_break":     ["argh!", "ui!", "ow!"],
+	"howl_cancel":     ["au!", "ow!", "para!"],
+	"cower":           ["não! não!", "ui ui ui!", "para!", "misericórdia!"],
+	"berserk_trigger": ["EU SOU O ÚLTIMO!!!", "ATÉ O FIM!!!", "MORRA!!!"],
+}
+const _SPEECH_STYLE: Dictionary = {
+	"berserk":         {"color": Color(1.0, 0.10, 0.05), "size": 42, "dur": [1.8, 2.5]},
+	"rage":            {"color": Color(1.0, 0.20, 0.10), "size": 40, "dur": [1.2, 1.8]},
+	"player_low":      {"color": Color(1.0, 0.85, 0.20), "size": 34, "dur": [1.5, 2.2]},
+	"outnumber":       {"color": Color(1.0, 0.85, 0.20), "size": 34, "dur": [1.5, 2.0]},
+	"leader":          {"color": Color(1.0, 0.80, 0.10), "size": 36, "dur": [1.5, 2.0]},
+	"idle":            {"color": Color(1.0, 0.92, 0.20), "size": 32, "dur": [1.2, 2.0]},
+	"howl":            {"color": Color(1.0, 0.30, 0.10), "size": 44, "dur": [1.0, 1.4]},
+	"block":           {"color": Color(0.8, 0.80, 1.00), "size": 30, "dur": [0.5, 0.8]},
+	"guard_break":     {"color": Color(1.0, 0.50, 0.20), "size": 28, "dur": [0.4, 0.6]},
+	"howl_cancel":     {"color": Color(0.7, 1.00, 0.70), "size": 28, "dur": [0.5, 0.7]},
+	"cower":           {"color": Color(0.75, 0.75, 1.0), "size": 30, "dur": [0.8, 1.2]},
+	"berserk_trigger": {"color": Color(1.0, 0.10, 0.05), "size": 46, "dur": [2.0, 2.5]},
+}
 var is_taunting: bool = false
 var _taunt_timer: float = 0.0
 var _taunt_cooldown: float = 0.0
-var _taunt_label: Label3D = null
 
 # ─── Sistema Q — Throw / Kite ─────────────────────────────────────────────────
 @export var is_ranged: bool = false
@@ -205,10 +228,12 @@ var _sep_frame: int = 0
 var _anim_frame: int = 0
 
 # ─── Sistema P — Squash & Stretch Jiggle ─────────────────────────────────────
-var _jiggle_scale := Vector3.ONE
-var _jiggle_vel   := Vector3.ZERO
-var _prev_vel     := Vector3.ZERO
-var _was_grounded := true
+var _jiggle_scale      := Vector3.ONE
+var _jiggle_vel        := Vector3.ZERO
+var _prev_vel          := Vector3.ZERO
+var _was_grounded      := true
+var _goblin_base_scale := Vector3.ONE   # scale do spawner (tamanho + variação)
+var _jiggle_ready      := false         # true após primeira captura do base scale
 
 var health: int
 var player: Node3D
@@ -223,6 +248,9 @@ var _attack_tween: Tween = null
 # Esqueleto
 var _skeleton: Skeleton3D
 var _bones: Dictionary = {}
+
+# Rim glow shader
+var _rim_mat: ShaderMaterial = null
 
 # Animação
 var run_time := 0.0
@@ -243,6 +271,7 @@ func _ready() -> void:
 		base_mesh_pos = goblin_mesh.position
 		await get_tree().process_frame
 		_cache_skeleton()
+		_setup_rim_shader()
 
 	# Material compartilhado entre todos os gore chunks deste goblin
 	_gore_mat = StandardMaterial3D.new()
@@ -288,34 +317,41 @@ func _ready() -> void:
 
 # ─── Sistema F — Wave Escalation ─────────────────────────────────────────────
 
+func emerge_from_cage() -> void:
+	if goblin_mesh == null:
+		return
+	var target := goblin_mesh.scale
+	goblin_mesh.scale = Vector3.ZERO
+	var tw := goblin_mesh.create_tween()
+	tw.tween_property(goblin_mesh, "scale", target * 1.25, 0.18)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(goblin_mesh, "scale", target, 0.10)
+	# Grito ao sair da jaula
+	tw.tween_callback(func(): _speak_ctx("rage"))
+
 func apply_wave_scaling(wave: int) -> void:
-	var w := mini(wave, 10)
+	var w := mini(wave, 15)
 	_wave_num = wave
 
-	# Velocidade — +0.15/wave, perceptível mas não insano
-	speed += 0.15 * (w - 1)
+	# Velocidade — +0.07/wave, crescimento bem suave
+	speed += 0.07 * (w - 1)
 
-	# Cooldown de ataque — mais agressivo com as waves
-	attack_cooldown_time = maxf(0.65, attack_cooldown_time - 0.07 * (w - 1))
+	# Cooldown de ataque — floor em 0.90s, redução lenta
+	attack_cooldown_time = maxf(0.90, attack_cooldown_time - 0.04 * (w - 1))
 
-	# HP escalando: wave 5 = 4 HP, wave 8 = 5 HP
-	if wave >= 8:
+	# HP: spike tardio — wave 8 = 4 HP, wave 12 = 5 HP
+	if wave >= 12:
 		max_health = 5
-	elif wave >= 5:
+	elif wave >= 8:
 		max_health = 4
 	health = max_health
 
-	# Dano: wave 5 = 2, wave 9 = 3
+	# Dano: só aumenta bem tarde — wave 9 = 2, nunca 3
 	if wave >= 9:
-		attack_damage = 3
-	elif wave >= 5:
 		attack_damage = 2
 
-	# Atacantes simultâneos
-	if wave >= 5:
-		MAX_ACTIVE_ATTACKERS = 4
-		circle_speed_factor = 0.80
-	elif wave >= 3:
+	# Atacantes simultâneos — máximo 3 sempre
+	if wave >= 4:
 		MAX_ACTIVE_ATTACKERS = 3
 
 # ─── Esqueleto ────────────────────────────────────────────────────────────────
@@ -338,6 +374,24 @@ func _cache_skeleton() -> void:
 			  "perna.R", "perna.L"]:
 		_bones[n] = _skeleton.find_bone(n)
 
+func _setup_rim_shader() -> void:
+	var shader := load("res://shaders/goblin_rim.gdshader") as Shader
+	if shader == null or goblin_mesh == null:
+		return
+	_rim_mat = ShaderMaterial.new()
+	_rim_mat.shader = shader
+	# Aplica como next_pass em cada surface de cada MeshInstance3D do goblin_mesh
+	for mi in goblin_mesh.find_children("*", "MeshInstance3D", true, false):
+		var mesh_inst := mi as MeshInstance3D
+		if mesh_inst.mesh == null:
+			continue
+		for s in mesh_inst.mesh.get_surface_count():
+			var orig := mesh_inst.get_active_material(s)
+			if orig != null:
+				orig.next_pass = _rim_mat
+			else:
+				mesh_inst.set_surface_override_material(s, _rim_mat)
+
 func _sb(name: String, q: Quaternion) -> void:
 	var idx: int = _bones.get(name, -1)
 	if idx >= 0:
@@ -353,6 +407,10 @@ func _slerp_bone(name: String, target: Quaternion, t: float) -> void:
 # ─── Física ───────────────────────────────────────────────────────────────────
 
 func _physics_process(delta: float) -> void:
+	# Safety net: NaN velocity (de knockback com vetor zero normalizado) congela o enemy
+	if not velocity.is_finite():
+		velocity = Vector3.ZERO
+
 	# Clamp de posição: nunca sair da arena independente do estado
 	var flat := Vector2(global_position.x, global_position.z)
 	if flat.length_squared() > ARENA_RADIUS * ARENA_RADIUS:
@@ -449,8 +507,6 @@ func _physics_process(delta: float) -> void:
 		_taunt_timer -= delta
 		if _taunt_timer <= 0.0:
 			is_taunting = false
-			if _taunt_label:
-				_taunt_label.visible = false
 		_animate_idle(delta)
 		move_and_slide()
 		return
@@ -513,13 +569,24 @@ func _physics_process(delta: float) -> void:
 
 	# Sistema O: trail de sangue durante voo de knockback
 	if is_knocked:
-		if not is_on_floor():
-			_blood_trail_timer -= delta
-			if _blood_trail_timer <= 0.0:
-				_blood_trail_timer = 0.25
-				_spawn_blood_decal(0.18, 0.5)
-		move_and_slide()
-		return
+		if is_on_floor() and velocity.y <= 0.0:
+			# Pousou antes do timer — encerra knockback imediatamente
+			is_knocked = false
+			if not is_dead:
+				is_recovering = true
+				_recovery_timer = randf_range(0.25, 0.45)
+				_spawn_blood_decal(0.7, 1.5)
+			if health <= 0 and not is_dead:
+				_die()
+			# Não retorna — cai para is_recovering ou fluxo normal
+		else:
+			if not is_on_floor():
+				_blood_trail_timer -= delta
+				if _blood_trail_timer <= 0.0:
+					_blood_trail_timer = 0.25
+					_spawn_blood_decal(0.18, 0.5)
+			move_and_slide()
+			return
 
 	if is_dead:
 		return  # física parada — set_physics_process(false) cuida disso
@@ -765,19 +832,14 @@ func _move_retreat(delta: float) -> void:
 
 # ─── Sistema L — Taunt ────────────────────────────────────────────────────────
 
-func _pick_taunt_text() -> String:
-	if _is_berserk:
-		return ["SÓ EU CONTRA TODOS!!!", "NÃO VOU FUGIR!", "VENHA, COVARDE!!!"].pick_random()
-	if _is_raging:
-		return ["VINGANÇA!!!", "POR MEU CAMARADA!!!", "VOCÊ VAI PAGAR!!!"].pick_random()
+func _pick_taunt_ctx() -> String:
+	if _is_berserk:      return "berserk"
+	if _is_raging:       return "rage"
 	var player_hp = player.get("health") if player else null
-	if player_hp != null and player_hp <= 1:
-		return ["quase... quase...", "agonizando! hehehe!", "só mais um pouquinho!"].pick_random()
-	if _enemy_cache.size() >= 6:
-		return ["somos muitos!", "não tem escapatória!", "cerquem ele!"].pick_random()
-	if is_leader:
-		return ["eu comando aqui!", "sigam-me!!!", "pela horda!"].pick_random()
-	return TAUNT_TEXTS.pick_random()
+	if player_hp != null and player_hp <= 1: return "player_low"
+	if _enemy_cache.size() >= 6:             return "outnumber"
+	if is_leader:                            return "leader"
+	return "idle"
 
 func _start_taunt() -> void:
 	is_taunting = true
@@ -785,7 +847,7 @@ func _start_taunt() -> void:
 	_taunt_timer = randf_range(1.2, 2.2)
 	velocity.x = 0.0
 	velocity.z = 0.0
-	_show_quick_label(_pick_taunt_text(), Color(1.0, 0.92, 0.2), _taunt_timer)
+	_speak_ctx(_pick_taunt_ctx())
 	if _skeleton:
 		_sb("bra.R", Quaternion(Vector3.FORWARD,  1.1))
 		_sb("bra.L", Quaternion(Vector3.FORWARD, -1.1))
@@ -807,7 +869,7 @@ func _start_throw() -> void:
 		_sb("clav.R", Quaternion(Vector3.FORWARD, 0.45))
 		_sb("coluna", Quaternion(Vector3.RIGHT, 0.18))
 
-	await get_tree().create_timer(0.38).timeout
+	await get_tree().create_timer(0.38, true).timeout
 	if is_dead or not is_instance_valid(self):
 		is_throwing = false
 		return
@@ -819,8 +881,9 @@ func _start_throw() -> void:
 		_sb("bra.R",  Quaternion(Vector3.FORWARD, -0.5))
 		_sb("clav.R", Quaternion(Vector3.FORWARD, -0.1))
 
-	await get_tree().create_timer(0.28).timeout
+	await get_tree().create_timer(0.28, true).timeout
 	if is_dead or not is_instance_valid(self):
+		is_throwing = false
 		return
 	is_throwing = false
 
@@ -857,15 +920,17 @@ func _start_feint() -> void:
 	if _skeleton:
 		_sb("coluna", Quaternion(Vector3.RIGHT, -0.35))
 		_sb("cabeca", Quaternion(Vector3.RIGHT,  0.2))
-	await get_tree().create_timer(0.35).timeout
+	await get_tree().create_timer(0.35, true).timeout
 	if not is_instance_valid(self) or is_dead:
 		is_feinting = false
 		return
 	# Para e recua levemente
 	velocity.x = 0.0
 	velocity.z = 0.0
-	await get_tree().create_timer(0.18).timeout
-	if not is_instance_valid(self): return
+	await get_tree().create_timer(0.18, true).timeout
+	if not is_instance_valid(self) or is_dead:
+		is_feinting = false
+		return
 	is_feinting = false
 
 # ─── Sistema S — Rage ─────────────────────────────────────────────────────────
@@ -874,10 +939,12 @@ func _trigger_rage() -> void:
 	if _is_raging or is_dead: return
 	_is_raging = true
 	_rage_timer = randf_range(4.0, 6.5)
+	if _rim_mat:
+		_rim_mat.set_shader_parameter("rage_glow", 1.0)
 	if _rage_mat:
 		_set_mesh_override(_rage_mat)
 	# Grito de raiva curto
-	_show_quick_label("AAARRR!", Color(1.0, 0.2, 0.1), 1.5)
+	_speak_ctx("rage")
 
 # ─── Sistema Y — Jump Attack ─────────────────────────────────────────────────
 
@@ -932,6 +999,8 @@ func promote_to_leader() -> void:
 	EnemyController._wave_has_leader = true
 	max_health += 1
 	health = max_health
+	if _rim_mat:
+		_rim_mat.set_shader_parameter("leader_glow", 1.0)
 	speed *= 1.12
 	if goblin_mesh:
 		goblin_mesh.scale *= 1.12
@@ -949,7 +1018,7 @@ func _start_war_howl() -> void:
 	is_howling = true
 	_howl_timer = 0.55
 	EnemyController._howl_global_cooldown = randf_range(20.0, 35.0)
-	_show_quick_label("AAAAOOOO!!!", Color(1.0, 0.3, 0.1), 1.2)
+	_speak_ctx("howl")
 	if _skeleton:
 		_sb("bra.R", Quaternion(Vector3.FORWARD,  1.3))
 		_sb("bra.L", Quaternion(Vector3.FORWARD, -1.3))
@@ -994,7 +1063,7 @@ func _start_throw_bomb() -> void:
 		_sb("bra.R",  Quaternion(Vector3.FORWARD, 1.3))
 		_sb("clav.R", Quaternion(Vector3.FORWARD, 0.45))
 		_sb("coluna", Quaternion(Vector3.RIGHT, 0.2))
-	await get_tree().create_timer(0.5).timeout
+	await get_tree().create_timer(0.5, true).timeout
 	if is_dead or not is_instance_valid(self):
 		is_throwing = false
 		return
@@ -1002,8 +1071,10 @@ func _start_throw_bomb() -> void:
 	if _skeleton:
 		_sb("bra.R",  Quaternion(Vector3.FORWARD, -0.5))
 		_sb("clav.R", Quaternion(Vector3.FORWARD, -0.1))
-	await get_tree().create_timer(0.35).timeout
-	if is_dead or not is_instance_valid(self): return
+	await get_tree().create_timer(0.35, true).timeout
+	if is_dead or not is_instance_valid(self):
+		is_throwing = false
+		return
 	is_throwing = false
 
 func _launch_bomb() -> void:
@@ -1073,8 +1144,7 @@ func _start_cower() -> void:
 		_sb("coluna", Quaternion(Vector3.RIGHT, 0.5))
 		_sb("cabeca", Quaternion(Vector3.RIGHT, 0.4))
 	if randf() < 0.45:
-		_show_quick_label(["não! não!", "ui ui ui!", "para!"][randi() % 3],
-				Color(0.75, 0.75, 1.0), _cower_timer)
+		_speak_ctx("cower")
 
 # ─── Sistema V — Berserk ──────────────────────────────────────────────────────
 
@@ -1089,26 +1159,41 @@ func _trigger_berserk() -> void:
 		_set_mesh_override(_rage_mat)
 	if goblin_mesh:
 		goblin_mesh.scale *= 1.15
-	_show_quick_label("EU SOU O ÚLTIMO!!!", Color(1.0, 0.1, 0.05), 2.5)
+	_speak_ctx("berserk_trigger")
 
-# ─── Helper: label rápida acima da cabeça ─────────────────────────────────────
+# ─── Sistema L — Speech helpers ───────────────────────────────────────────────
 
-func _show_quick_label(text: String, color: Color, duration: float) -> void:
-	if _taunt_label == null:
-		_taunt_label = Label3D.new()
-		_taunt_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		_taunt_label.font_size = 34
-		_taunt_label.outline_size = 6
-		_taunt_label.outline_modulate = Color(0.0, 0.0, 0.0, 1.0)
-		_taunt_label.position = Vector3(0.0, 2.3, 0.0)
-		add_child(_taunt_label)
-	_taunt_label.text = text
-	_taunt_label.modulate = color
-	_taunt_label.visible = true
-	get_tree().create_timer(duration, true).timeout.connect(func():
-		if is_instance_valid(self) and _taunt_label:
-			_taunt_label.visible = false
-	)
+func _speak(text: String, color: Color, size: int, duration: float) -> void:
+	if not is_instance_valid(self): return
+	var lbl := Label3D.new()
+	lbl.billboard    = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.font_size    = size
+	lbl.outline_size = 6
+	lbl.outline_modulate = Color(0.0, 0.0, 0.0, 1.0)
+	lbl.position     = Vector3(randf_range(-0.3, 0.3), 0.9, 0.0)
+	lbl.modulate     = color
+	lbl.text         = text
+	add_child(lbl)
+
+	var tw := lbl.create_tween()
+	# Scale bounce: 0 → 1.15 → 1.0
+	lbl.scale = Vector3.ZERO
+	tw.tween_property(lbl, "scale", Vector3.ONE * 1.15, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "scale", Vector3.ONE, 0.08)
+	# Float up over full duration
+	tw.parallel().tween_property(lbl, "position:y", lbl.position.y + 0.4, duration).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	# Fade out in last 40% of duration
+	tw.tween_property(lbl, "modulate:a", 0.0, duration * 0.4).set_delay(duration * 0.6 - 0.2)
+	tw.tween_callback(lbl.queue_free)
+
+func _speak_ctx(ctx: String) -> void:
+	if not _SPEECH_DB.has(ctx) or not _SPEECH_STYLE.has(ctx): return
+	var db: Array   = _SPEECH_DB[ctx]
+	var st: Dictionary = _SPEECH_STYLE[ctx]
+	if db.is_empty(): return
+	var text: String     = db[randi() % db.size()]
+	var dur: float       = randf_range(st["dur"][0], st["dur"][1])
+	_speak(text, st["color"], st["size"], dur)
 
 # ─── Sistema K — Charge Attack ────────────────────────────────────────────────
 
@@ -1154,27 +1239,31 @@ func _update_jiggle(delta: float) -> void:
 	if goblin_mesh == null:
 		return
 
-	# Landing squash only — sem stretch contínuo por velocidade
 	var on_floor := is_on_floor()
 	if on_floor and not _was_grounded:
+		# Captura o scale base do spawner (inclui variação de tamanho + promoções)
+		# Feito aqui porque _ready() roda antes do spawner aplicar o scale.
+		if not _jiggle_ready:
+			_goblin_base_scale = goblin_mesh.scale
+			_jiggle_ready = true
 		var impact := clampf(-_prev_vel.y, 0.0, 14.0)
-		_jiggle_vel.x += impact * 0.055
-		_jiggle_vel.y -= impact * 0.13
-		_jiggle_vel.z += impact * 0.055
+		# Impulso UNIFORME — scale sempre proporcional em X/Y/Z → Jolt não reclama
+		var impulse := -impact * 0.08
+		_jiggle_vel = Vector3(impulse, impulse, impulse)
 	_was_grounded = on_floor
-	_prev_vel.y = velocity.y  # só Y importa para detecção de queda
+	_prev_vel.y = velocity.y
 
-	# Spring só quando há energia — pula se praticamente em repouso
 	var mag := absf(_jiggle_vel.x) + absf(_jiggle_vel.y) + absf(_jiggle_vel.z)
 	if mag < 0.005 and _jiggle_scale.is_equal_approx(Vector3.ONE):
 		return
 
-	_jiggle_vel += (Vector3.ONE - _jiggle_scale) * 200.0 * delta
-	_jiggle_vel  *= maxf(0.0, 1.0 - 14.0 * delta)
+	_jiggle_vel   += (Vector3.ONE - _jiggle_scale) * 200.0 * delta
+	_jiggle_vel   *= maxf(0.0, 1.0 - 14.0 * delta)
 	_jiggle_scale += _jiggle_vel * delta
-	_jiggle_scale  = _jiggle_scale.clamp(Vector3(0.5, 0.5, 0.5), Vector3(1.7, 1.7, 1.7))
+	_jiggle_scale  = _jiggle_scale.clamp(Vector3(0.55, 0.55, 0.55), Vector3(1.6, 1.6, 1.6))
 
-	goblin_mesh.scale = _jiggle_scale
+	# Aplica relativo ao base scale do spawner — preserva variação de tamanho
+	goblin_mesh.scale = _goblin_base_scale * _jiggle_scale
 
 # ─── Sistema M — Separation Force ────────────────────────────────────────────
 
@@ -1258,7 +1347,7 @@ func _start_attack() -> void:
 
 	var hesitation := randf_range(0.0, 0.15)
 	if hesitation > 0.02:
-		await get_tree().create_timer(hesitation).timeout
+		await get_tree().create_timer(hesitation, true).timeout
 
 	if is_dead or not is_instance_valid(self):
 		_release_attack_token()
@@ -1346,6 +1435,9 @@ func _do_attack_hit_with_force(kb: float) -> void:
 
 func take_hit(knockback: Vector3) -> void:
 	if is_dead: return
+	# Guard: vetor zero ou NaN normalizado → NaN no velocity → freeze permanente
+	if not knockback.is_finite() or knockback.length_squared() < 0.0001:
+		knockback = Vector3.BACK * 2.0
 
 	# Sistema Z: guard stance absorbs one normal hit (heavy slam kb >= 35 breaks through)
 	if is_blocking_stance:
@@ -1355,19 +1447,19 @@ func take_hit(knockback: Vector3) -> void:
 			_guard_cooldown = randf_range(8.0, 14.0)
 			_bounce_mesh()
 			_flash_hit()
-			_show_quick_label("bloqueei!", Color(0.8, 0.8, 1.0), 0.6)
+			_speak_ctx("block")
 			return
 		else:
 			# Heavy slam shatters guard
 			is_blocking_stance = false
 			_guard_cooldown = randf_range(4.0, 6.0)
-			_show_quick_label("argh!", Color(1.0, 0.5, 0.2), 0.5)
+			_speak_ctx("guard_break")
 
 	# Sistema AB: hitting howler cancels the howl
 	if is_howling:
 		is_howling = false
 		_howl_timer = 0.0
-		_show_quick_label("cancelado!", Color(0.7, 1.0, 0.7), 0.7)
+		_speak_ctx("howl_cancel")
 
 	if is_attacking and _attack_tween:
 		_attack_tween.kill()
@@ -1376,11 +1468,13 @@ func take_hit(knockback: Vector3) -> void:
 		is_in_strike = false
 		is_attacking = false
 		_release_attack_token()
-	# Charge interrupt
-	if is_charging:
-		is_charging = false
+	# Interrompe qualquer estado assíncrono em andamento
+	is_charging  = false
+	is_feinting  = false
+	is_howling   = false
+	is_jumping   = false
 	health -= 1
-	var hit_dir := knockback.normalized()
+	var hit_dir := knockback.normalized() if knockback.length_squared() > 0.0001 else Vector3.BACK
 	_play_blood(-hit_dir + Vector3(0, 0.6, 0))  # spray sobe e se afasta do golpe
 	_bounce_mesh()
 	_flash_hit()
@@ -1398,6 +1492,13 @@ func take_hit(knockback: Vector3) -> void:
 	if health == 1 and not is_retreating:
 		is_retreating = true
 		_retreat_timer = randf_range(1.0, 2.0)
+
+	# Rim shader — flash branco de dano
+	if _rim_mat:
+		_rim_mat.set_shader_parameter("damage_flash", 1.0)
+		var ft := create_tween()
+		ft.tween_method(func(v: float): _rim_mat.set_shader_parameter("damage_flash", v),
+			1.0, 0.0, 0.18)
 
 	# Sistema X: notifica goblins próximos que o player atacou
 	EnemyController.notify_player_attacked(global_position)
@@ -1418,10 +1519,12 @@ func take_hit(knockback: Vector3) -> void:
 		velocity.y = 5.0
 		is_knocked = true
 		is_recovering = false
-		get_tree().create_timer(knockback_duration).timeout.connect(func():
+		get_tree().create_timer(knockback_duration, true).timeout.connect(func():
+			if not is_instance_valid(self) or not is_knocked:
+				return  # Já pousou — transição já feita no _physics_process
 			is_knocked = false
 			# Sistema W: recovering — janela de punição ao pousar
-			if is_instance_valid(self) and not is_dead:
+			if not is_dead:
 				is_recovering = true
 				_recovery_timer = randf_range(0.25, 0.45)
 			# Sistema O: landing splat ao pousar
@@ -1431,7 +1534,7 @@ func take_hit(knockback: Vector3) -> void:
 		, CONNECT_ONE_SHOT)
 		# Sistema T: cower se foi parry (kb >= 35)
 		if kb_magnitude >= 35.0:
-			get_tree().create_timer(knockback_duration + 0.2).timeout.connect(func():
+			get_tree().create_timer(knockback_duration + 0.2, true).timeout.connect(func():
 				if is_instance_valid(self) and not is_dead:
 					_start_cower()
 			, CONNECT_ONE_SHOT)
@@ -1467,7 +1570,7 @@ func _bounce_mesh() -> void:
 
 func _flash_hit() -> void:
 	_set_mesh_override(_hit_flash_mat)
-	get_tree().create_timer(0.07).timeout.connect(func():
+	get_tree().create_timer(0.07, true).timeout.connect(func():
 		# Trapper restaura invisibilidade após flash; outros voltam ao material padrão
 		if is_trapper and _trapper_visible_timer <= 0.0:
 			_set_mesh_override(_trapper_mat)
@@ -1492,7 +1595,20 @@ func _play_blood(direction: Vector3 = Vector3.UP) -> void:
 func _die() -> void:
 	if is_dead: return
 	is_dead = true
-	is_charging = false
+	# Reset de todos os estados — garante que nenhuma flag fica "presa" no zombie state
+	is_charging    = false
+	is_throwing    = false
+	is_feinting    = false
+	is_howling     = false
+	is_taunting    = false
+	is_cowering    = false
+	is_retreating  = false
+	is_recovering  = false
+	is_stumbling   = false
+	is_blocking_stance = false
+	is_jumping     = false
+	is_in_windup   = false
+	is_in_strike   = false
 	# Garante que o death tween sempre roda, mesmo com árvore pausada (baú, pause menu)
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	# Mata attack tween se ainda estiver ativo
@@ -1532,6 +1648,11 @@ func _die() -> void:
 			_sb("bra.L",  Quaternion(Vector3.FORWARD, -0.6))
 		# else: spin — sem pose, tween rotaciona
 
+	# Safety: garante queue_free mesmo que os awaits abaixo travem
+	get_tree().create_timer(2.0, true).timeout.connect(func():
+		if is_instance_valid(self): queue_free()
+	, CONNECT_ONE_SHOT)
+
 	Engine.time_scale = 0.15
 	await get_tree().create_timer(0.18, true, false, true).timeout
 	Engine.time_scale = 1.0
@@ -1544,6 +1665,7 @@ func _die() -> void:
 	else:
 		tween.tween_property(visual, "scale", Vector3.ZERO, 0.25)
 	await tween.finished
+	if not is_instance_valid(self): return
 	if player and player.has_method("add_combo_kill"):
 		player.add_combo_kill()
 	var hud = get_tree().get_first_node_in_group("hud")

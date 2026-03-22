@@ -21,7 +21,7 @@
 [ext_resource type="PackedScene" path="res://scenes/props/bottle_potion_health.tscn" id="19_yc10j"]
 [ext_resource type="PackedScene" path="res://scenes/props/wooden_barrel.tscn" id="20_jscy8"]
 [ext_resource type="PackedScene" path="res://scenes/props/cage.tscn" id="21_yc10j"]
-[ext_resource type="PackedScene" path="res://scenes/ui/title_overlay.tscn" id="22_title"]
+[ext_resource type="PackedScene" uid="uid://xw2juggij0" path="res://scenes/ui/title_overlay.tscn" id="22_title"]
 
 [sub_resource type="BoxShape3D" id="floor_shape"]
 size = Vector3(60, 0.5, 60)
@@ -211,10 +211,10 @@ metadata/_edit_use_anchors_ = true
 [node name="Props" type="Node3D" parent="." unique_id=100000001]
 
 [node name="groundSpike01" parent="Props" unique_id=873429174 instance=ExtResource("10_muem4")]
-transform = Transform3D(0.8587513, 0, 0, 0, 0.8587513, 0, 0, 0, 0.8587513, 6.7640963, 0.11189151, 7.9911194)
+transform = Transform3D(0.56486064, 0, -0.6468279, 0, 0.8587513, 0, 0.6468279, 0, 0.56486064, 17.72475, 0.12862515, 3.3881617)
 
 [node name="groundSpike02" parent="Props" unique_id=17030594 instance=ExtResource("11_dp3eg")]
-transform = Transform3D(0.8587513, 0, 0, 0, 0.8587513, 0, 0, 0, 0.8587513, 7.6563582, 0.11189151, 7.1083035)
+transform = Transform3D(0.56486064, 0, -0.6468279, 0, 0.8587513, 0, 0.6468279, 0, 0.56486064, 19.375235, 0.12862515, -12.059097)
 
 [node name="skull" parent="Props" unique_id=805128212 instance=ExtResource("12_0ld40")]
 transform = Transform3D(-0.6952286, 0, -0.5040941, 0, 1, 0, 0.5040941, 0, -0.6952286, 8.347003, 0.11189175, 10.705568)
@@ -286,7 +286,7 @@ transform = Transform3D(0.09033038, -0.99445236, 0, 0.8539873, 0.10518805, 0, 0,
 transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, -8.621685, 0.11189163, -1.2400548)
 
 [node name="pillar02" parent="Props" unique_id=378972081 instance=ExtResource("15_jscy8")]
-transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 4.5871496, 0.11189163, 3.014962)
+transform = Transform3D(1.884, 0, 0, 0, 2.193, 0, 0, 0, 1.884, 1.7800066, 0.11189163, 10.627358)
 
 [node name="pillar03" parent="Props" unique_id=1238835360 instance=ExtResource("15_jscy8")]
 transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 10.557886, 0.11189163, 1.2336708)
@@ -301,10 +301,10 @@ transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, -0.8557911, 0
 transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, -9.50634, 0.11189163, -13.377656)
 
 [node name="pillar07" parent="Props" unique_id=728888354 instance=ExtResource("16_pm3ni")]
-transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, -3.889411, 0.11189151, -0.1604774)
+transform = Transform3D(1.764, 0, 0, 0, 2.054, 0, 0, 0, 1.764, -3.889411, 0.11189151, -0.1604774)
 
 [node name="pillar09" parent="Props" unique_id=1191728297 instance=ExtResource("16_pm3ni")]
-transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, -3.889411, 1.1178936, -0.1604774)
+transform = Transform3D(1.764, 0, 0, 0, 2.054, 0, 0, 0, 1.764, -3.889411, 1.1178936, -0.1604774)
 
 [node name="pillar08" parent="Props" unique_id=410369766 instance=ExtResource("16_pm3ni")]
 transform = Transform3D(2.029, 0, 0, 0, 2.362, 0, 0, 0, 2.029, 2.1025553, 0.21817017, -4.3096175)
@@ -313,22 +313,22 @@ transform = Transform3D(2.029, 0, 0, 0, 2.362, 0, 0, 0, 2.029, 2.1025553, 0.2181
 transform = Transform3D(2.029, 0, 0, 0, 2.362, 0, 0, 0, 2.029, 2.1025553, 1.2500916, -4.3096175)
 
 [node name="pillar11" parent="Props" unique_id=294819417 instance=ExtResource("16_pm3ni")]
-transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 4.0309267, 0.11189127, -13.639662)
+transform = Transform3D(2.844, 0, 0, 0, 3.311, 0, 0, 0, 2.844, 4.0309267, 0.11189127, -13.639662)
 
 [node name="pillar12" parent="Props" unique_id=1836737516 instance=ExtResource("16_pm3ni")]
-transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 4.0309267, 1.1438127, -13.639662)
+transform = Transform3D(2.844, 0, 0, 0, 3.311, 0, 0, 0, 2.844, 4.0309267, 1.1438127, -13.639662)
 
 [node name="pillar13" parent="Props" unique_id=666633367 instance=ExtResource("16_pm3ni")]
-transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 14.2693205, 0.11189127, 5.449669)
+transform = Transform3D(2.844, 0, 0, 0, 3.311, 0, 0, 0, 2.844, 14.2693205, 0.11189127, 5.449669)
 
 [node name="pillar14" parent="Props" unique_id=940051634 instance=ExtResource("16_pm3ni")]
-transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 14.2693205, 1.1438127, 5.449669)
+transform = Transform3D(2.844, 0, 0, 0, 3.311, 0, 0, 0, 2.844, 14.2693205, 1.1438127, 5.449669)
 
 [node name="pillar15" parent="Props" unique_id=2090948984 instance=ExtResource("16_pm3ni")]
-transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, -11.120124, 0.11189127, 8.981181)
+transform = Transform3D(1.764, 0, 0, 0, 2.054, 0, 0, 0, 1.764, -11.120124, 0.11189127, 8.981181)
 
 [node name="pillar16" parent="Props" unique_id=1187081705 instance=ExtResource("16_pm3ni")]
-transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, -11.120124, 1.1438127, 8.981181)
+transform = Transform3D(1.764, 0, 0, 0, 2.0539963, -0.0033250595, 0, 0.0038716958, 1.763997, -11.120124, 1.1438127, 8.981181)
 
 [node name="wallChain" parent="Props" unique_id=1551104494 instance=ExtResource("17_y6deb")]
 transform = Transform3D(-0.01539194, -0.54428816, 0.72024053, 0.8586133, -0.009757186, 0.0129114, 0, 0.83884156, 0.4674832, 12.278326, 0.11189175, -1.6284655)
@@ -364,22 +364,22 @@ transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 21.12144, 0.1
 transform = Transform3D(0.8587513, 0, 0, 0, 1, 0, 0, 0, 0.8587513, 20.065226, 0.11189175, 9.1274185)
 
 [node name="cage" parent="Props" unique_id=498650748 instance=ExtResource("21_yc10j")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20.413227, 0.11189079, 9.369225)
+transform = Transform3D(1.65, 0, 0, 0, 1.65, 0, 0, 0, 1.65, -20.413227, 0.11189079, 9.369225)
 
 [node name="cage2" parent="Props" unique_id=830813873 instance=ExtResource("21_yc10j")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22.26676, 0.11189079, -3.9158)
+transform = Transform3D(1.65, 0, 0, 0, 1.65, 0, 0, 0, 1.65, -22.26676, 0.11189079, -3.9158)
 
 [node name="cage3" parent="Props" unique_id=310894617 instance=ExtResource("21_yc10j")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -19.226412, 0.11189079, -13.2827215)
+transform = Transform3D(1.65, 0, 0, 0, 1.65, 0, 0, 0, 1.65, -19.226412, 0.11189079, -13.2827215)
 
 [node name="cage4" parent="Props" unique_id=754685777 instance=ExtResource("21_yc10j")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.215889, 0.11189079, -19.470478)
+transform = Transform3D(1.65, 0, 0, 0, 1.65, 0, 0, 0, 1.65, -12.215889, 0.11189079, -19.470478)
 
 [node name="cage5" parent="Props" unique_id=384331331 instance=ExtResource("21_yc10j")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.4235535, 0.11189079, -22.911697)
+transform = Transform3D(1.65, 0, 0, 0, 1.65, 0, 0, 0, 1.65, -3.4235535, 0.11189079, -22.911697)
 
 [node name="cage6" parent="Props" unique_id=880190730 instance=ExtResource("21_yc10j")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.764809, 0.11189079, -20.248299)
+transform = Transform3D(1.65, 0, 0, 0, 1.65, 0, 0, 0, 1.65, 12.764809, 0.11189079, -20.248299)
 
 [node name="TitleOverlay" parent="." unique_id=893056652 instance=ExtResource("22_title")]
 

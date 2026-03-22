@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://c4djdi2kno33d"
 path.s3tc="res://.godot/imported/Sword_01_FantasyWeapons_Texture_01.png-657435d7a37b5c1595c62e3c3e8780ef.s3tc.ctex"
+path.etc2="res://.godot/imported/Sword_01_FantasyWeapons_Texture_01.png-657435d7a37b5c1595c62e3c3e8780ef.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/Sword_01_FantasyWeapons_Texture_01.png"
-dest_files=["res://.godot/imported/Sword_01_FantasyWeapons_Texture_01.png-657435d7a37b5c1595c62e3c3e8780ef.s3tc.ctex"]
+dest_files=["res://.godot/imported/Sword_01_FantasyWeapons_Texture_01.png-657435d7a37b5c1595c62e3c3e8780ef.s3tc.ctex", "res://.godot/imported/Sword_01_FantasyWeapons_Texture_01.png-657435d7a37b5c1595c62e3c3e8780ef.etc2.ctex"]
 
 [params]
 

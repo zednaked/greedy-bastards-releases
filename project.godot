@@ -16,6 +16,11 @@ run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
 
+[autoload]
+
+GameManager="*res://scripts/game_manager.gd"
+ScreenFX="*res://scripts/fx/screen_fx.gd"
+
 [display]
 
 window/size/viewport_width=1920
@@ -73,10 +78,6 @@ block={
 ]
 }
 
-[autoload]
-
-GameManager="*res://scripts/game_manager.gd"
-
 [physics]
 
 3d/run_on_separate_thread=true
@@ -84,6 +85,7 @@ GameManager="*res://scripts/game_manager.gd"
 
 [rendering]
 
+textures/vram_compression/import_etc2_astc=true
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=0
 textures/default_filters/anisotropic_filtering_level=0
 environment/defaults/default_clear_color=Color(0.3019608, 0.52156866, 0.3529412, 1)
