@@ -592,23 +592,30 @@ func _physics_process(delta: float) -> void:
 			move_and_slide()
 			return
 
-	# Watchdog: se o goblin não se mover por 2s enquanto deveria estar em movimento,
-	# força reset de todos os estados de bloqueio (previne wave travada).
+	# Watchdog: se o goblin não se mover por 2s, libera estados e aplica impulso de fuga.
+	# Estados intencionalmente parados são ignorados (cower, taunt, howl, guard, dead).
 	if not is_dead:
 		_freeze_watch_timer += delta
-		if _freeze_watch_timer >= 2.0:
+		if _freeze_watch_timer >= 1.5:
 			var moved := global_position.distance_to(_freeze_watch_pos)
 			_freeze_watch_pos = global_position
 			_freeze_watch_timer = 0.0
-			if moved < 0.4 and (is_knocked or is_recovering or is_stumbling or is_feinting):
+			var intentionally_still := is_taunting or is_cowering or is_howling or is_blocking_stance or is_throwing
+			if moved < 0.4 and not intentionally_still:
+				# Libera todos os estados de bloqueio
 				is_knocked    = false
 				is_recovering = false
 				is_stumbling  = false
 				is_feinting   = false
-				velocity      = Vector3.ZERO
-				# Se estiver no ar, desce para y=0 (chão padrão da arena)
+				is_charging   = false
+				is_retreating = false
+				is_jumping    = false
+				# Corrige posição se estiver no ar
 				if not is_on_floor():
 					global_position.y = 0.0
+				# Impulso aleatório perpendicular para escapar do obstáculo
+				var escape := Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0)).normalized()
+				velocity = escape * speed * 4.0
 
 	if is_dead:
 		return  # física parada — set_physics_process(false) cuida disso
