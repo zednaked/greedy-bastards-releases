@@ -16,11 +16,10 @@ func _ready() -> void:
 	_collect_area.add_child(col)
 	add_child(_collect_area)
 	_collect_area.body_entered.connect(_on_body_entered)
+	# Auto-free após lifetime — conexão direta ao método (Godot desconecta automaticamente se freed antes)
+	get_tree().create_timer(_lifetime).timeout.connect(queue_free)
 
 func _process(delta: float) -> void:
-	_lifetime -= delta
-	if _lifetime <= 0.0:
-		queue_free()
 	# Slow rotation for visual flair
 	rotate_y(delta * 2.8)
 
@@ -30,6 +29,8 @@ func _on_body_entered(body: Node) -> void:
 	if not body.is_in_group("player"):
 		return
 	_collected = true
+	_collect_area.body_entered.disconnect(_on_body_entered)
+	_collect_area.set_deferred("monitoring", false)
 	if body.has_method("add_coins"):
 		body.add_coins(value)
 	# Pop tween before freeing

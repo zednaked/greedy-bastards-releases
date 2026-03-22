@@ -133,8 +133,8 @@ func _spawn_one() -> void:
 		enemy.goblin_mesh.scale = enemy.goblin_mesh.scale * s
 	enemy.run_time = randf() * TAU
 	enemy.apply_wave_scaling(_wave)
-	# Tipos especiais desbloqueados por wave — mutuamente exclusivos
-	# Wave 4+: ranged 12%  | Wave 6+: bomber 6%  | Wave 8+: trapper 4%
+	# Tipos especiais desbloqueados por wave — mutuamente exclusivos via elif.
+	# Probabilidades efetivas: ranged 12% | bomber 6% (0.12–0.18) | trapper 4% (0.18–0.22)
 	var type_roll := randf()
 	if _wave >= 4 and type_roll < 0.12:
 		enemy.is_ranged = true

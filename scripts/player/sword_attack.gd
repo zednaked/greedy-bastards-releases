@@ -66,7 +66,7 @@ var _is_flick       := false
 var attack_cooldown := 0.0
 var _attack_id      := 0
 var _current_tween: Tween = null
-var _hit_bodies: Array = []
+var _hit_bodies: Dictionary = {}  # body → true, O(1) lookup
 
 var _attack_buffered: bool = false
 var _buffer_age: float = 0.0
@@ -195,7 +195,7 @@ func _process(delta: float) -> void:
 	if hitbox.monitoring:
 		for body in hitbox.get_overlapping_bodies():
 			if body not in _hit_bodies:
-				_hit_bodies.append(body)
+				_hit_bodies[body] = true
 				_on_hit(body)
 
 	_update_spring(delta)
@@ -567,13 +567,20 @@ func _on_hit(body: Node3D) -> void:
 	if not body.is_in_group("enemies") or not body.has_method("take_hit"):
 		return
 
-	var direction := (body.global_position - global_position).normalized()
-	direction.y = 0.0
+	var dir_raw := body.global_position - global_position
+	dir_raw.y = 0.0
+	var direction: Vector3
+	if dir_raw.length_squared() > 0.001:
+		direction = dir_raw.normalized()
+	else:
+		direction = -player.global_transform.basis.z
+		direction.y = 0.0
+		direction = direction.normalized()
 	var kb := knockback_force
 	var is_parry := false
 	var is_kill: bool = "health" in body and body.health <= 1
 
-	if player and player._dash_attack_window > 0.0:
+	if player and player.is_in_dash_attack_window():
 		kb *= 2.0
 
 	if "is_in_windup" in body and body.is_in_windup:

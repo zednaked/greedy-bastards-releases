@@ -189,6 +189,14 @@ func _physics_process(delta: float) -> void:
 		velocity.z = flat_vel.z
 
 	move_and_slide()
+
+	# Clamp dentro da arena
+	var flat := Vector2(global_position.x, global_position.z)
+	if flat.length() > ARENA_RADIUS:
+		flat = flat.normalized() * ARENA_RADIUS
+		global_position.x = flat.x
+		global_position.z = flat.y
+
 	_update_camera(delta)
 
 func _start_dash(action: String) -> void:
@@ -420,6 +428,9 @@ func equip_weapon(weapon_name: String, weapon_node: Node3D = null) -> void:
 			sword_mesh.add_child(weapon_node)
 		weapon_node.position = Vector3.ZERO
 		weapon_node.rotation = Vector3.ZERO
+
+func is_in_dash_attack_window() -> bool:
+	return _dash_attack_window > 0.0
 
 func add_coins(amount: int) -> void:
 	coins += amount

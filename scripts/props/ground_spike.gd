@@ -11,11 +11,17 @@ func _ready() -> void:
 	body_exited.connect(_on_body_exited)
 
 func _process(delta: float) -> void:
+	var stale: Array = []
 	for body in _bodies.keys():
+		if not is_instance_valid(body):
+			stale.append(body)
+			continue
 		_bodies[body] -= delta
 		if _bodies[body] <= 0.0:
 			_hit(body)
 			_bodies[body] = hit_interval
+	for body in stale:
+		_bodies.erase(body)
 
 func _on_body_entered(body: Node) -> void:
 	if body.has_method("take_damage"):

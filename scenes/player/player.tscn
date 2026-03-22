@@ -9,7 +9,7 @@ radius = 0.4
 height = 1.8
 
 [sub_resource type="BoxShape3D" id="2"]
-size = Vector3(0.61744994, 0.8106445, 0.58063966)
+size = Vector3(0.30683377, 0.46428528, 0.20923309)
 
 [node name="Player" type="CharacterBody3D" unique_id=1864464396]
 script = ExtResource("1")
@@ -45,10 +45,10 @@ s2_t_slam = 0.23
 [node name="SwordMesh" type="Node3D" parent="Head/WeaponPivot" unique_id=814228862]
 
 [node name="SwordHitbox" type="Area3D" parent="Head/WeaponPivot" unique_id=1151957303]
-transform = Transform3D(-0.85042906, 0.70398843, -0.73066616, 0.13488422, 2.7071407, 0.2839492, 0.7783358, 0.3000524, -0.84755206, 0, 0, 0)
+transform = Transform3D(-0.20882641, 1.9345292, -1.128228, 0.033121403, 7.4391003, 0.4384479, 0.19112363, 0.8245302, -1.3087106, 0, 0, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Head/WeaponPivot/SwordHitbox" unique_id=1217920453]
-transform = Transform3D(1.0000159, 5.9604645e-08, 6.2584877e-07, -1.0896474e-07, 0.9999999, -7.636845e-08, -1.7940998e-05, -1.4901161e-08, 1.0000024, 0.100783765, 0.39467758, 0.08843991)
+transform = Transform3D(1.0000148, 8.024275e-06, 2.9802322e-07, -5.704351e-07, 0.99998564, -8.568168e-08, -1.7851591e-05, 7.905066e-06, 1.0000019, 0.035701796, 0.20516685, 0.004447326)
 shape = SubResource("2")
 
 [node name="SwingSound" type="AudioStreamPlayer3D" parent="Head/WeaponPivot" unique_id=497790528]

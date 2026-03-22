@@ -33,12 +33,17 @@ static var _active_attackers: int = 0
 static var MAX_ACTIVE_ATTACKERS: int = 2
 var _holds_attack_token: bool = false
 
+# Contador de slowmos ativos — evita que mortes simultâneas confusam o time_scale
+static var _slowmo_count: int = 0
+
 static func reset_token_pool() -> void:
 	_active_attackers = 0
 	MAX_ACTIVE_ATTACKERS = 2
 	_wave_has_leader = false
 	_flank_slots.clear()
 	_howl_global_cooldown = 0.0
+	_slowmo_count = 0
+	Engine.time_scale = 1.0
 
 # Sistema S + X: notificações estáticas (chamadas por instâncias, afetam todas)
 static func on_ally_death(origin: Vector3) -> void:
@@ -619,7 +624,7 @@ func _physics_process(delta: float) -> void:
 
 	if is_dead:
 		return  # física parada — set_physics_process(false) cuida disso
-	if player == null or is_attacking:
+	if not is_instance_valid(player) or is_attacking:
 		move_and_slide()
 		return
 
@@ -885,7 +890,7 @@ func _start_taunt() -> void:
 # ─── Sistema Q — Throw ────────────────────────────────────────────────────────
 
 func _start_throw() -> void:
-	if is_dead or player == null:
+	if is_dead or not is_instance_valid(player):
 		return
 	is_throwing = true
 	_throw_cooldown = throw_cooldown_time() + randf_range(-0.5, 1.2)
@@ -920,7 +925,7 @@ func throw_cooldown_time() -> float:
 	return attack_cooldown_time * 1.5
 
 func _launch_projectile() -> void:
-	if player == null:
+	if not is_instance_valid(player):
 		return
 	var proj_scene := projectile_scene
 	if proj_scene == null:
@@ -938,7 +943,7 @@ func _launch_projectile() -> void:
 # ─── Sistema R — Feint ────────────────────────────────────────────────────────
 
 func _start_feint() -> void:
-	if is_feinting or is_dead or player == null: return
+	if is_feinting or is_dead or not is_instance_valid(player): return
 	is_feinting = true
 	_circling_time = 0.0
 	# Charge agressivo por 0.35s
@@ -978,7 +983,7 @@ func _trigger_rage() -> void:
 # ─── Sistema Y — Jump Attack ─────────────────────────────────────────────────
 
 func _start_jump_attack() -> void:
-	if is_jumping or is_dead or player == null: return
+	if is_jumping or is_dead or not is_instance_valid(player): return
 	is_jumping = true
 	_jump_hit_done = false
 	_jump_cooldown = randf_range(6.0, 12.0)
@@ -1001,7 +1006,7 @@ func _on_jump_land() -> void:
 	_jiggle_vel.y -= 0.8
 	_jiggle_vel.x += 0.4
 	_jiggle_vel.z += 0.4
-	if player == null or is_dead: return
+	if not is_instance_valid(player) or is_dead: return
 	var d := global_position.distance_to(player.global_position)
 	if d < 2.2:
 		var dir := (player.global_position - global_position).normalized()
@@ -1083,7 +1088,7 @@ static func _assign_flank_slots() -> void:
 # ─── Bomber ───────────────────────────────────────────────────────────────────
 
 func _start_throw_bomb() -> void:
-	if is_dead or player == null: return
+	if is_dead or not is_instance_valid(player): return
 	is_throwing = true
 	_bomb_cooldown = randf_range(5.0, 9.0)
 	velocity.x = 0.0
@@ -1107,7 +1112,7 @@ func _start_throw_bomb() -> void:
 	is_throwing = false
 
 func _launch_bomb() -> void:
-	if player == null: return
+	if not is_instance_valid(player): return
 	var b_scene := bomb_scene
 	if b_scene == null:
 		b_scene = load("res://scenes/enemies/bomb.tscn") as PackedScene
@@ -1136,7 +1141,7 @@ func _set_trapper_alpha(alpha: float) -> void:
 	_set_mesh_override(_trapper_mat)
 
 func _start_place_trap() -> void:
-	if is_dead or player == null: return
+	if is_dead or not is_instance_valid(player): return
 	var t_scene := trap_scene
 	if t_scene == null:
 		t_scene = load("res://scenes/enemies/spike_trap.tscn") as PackedScene
@@ -1239,7 +1244,7 @@ func _start_charge() -> void:
 
 func _update_charge(delta: float) -> void:
 	_charge_timer -= delta
-	if player == null or is_dead or _charge_timer <= 0.0:
+	if not is_instance_valid(player) or is_dead or _charge_timer <= 0.0:
 		is_charging = false
 		return
 
@@ -1450,7 +1455,7 @@ func _pose_recover(t: float) -> void:
 	_slerp_bone("coluna", Quaternion.IDENTITY, t * 0.4)
 
 func _do_attack_hit_with_force(kb: float) -> void:
-	if is_dead or player == null: return
+	if is_dead or not is_instance_valid(player): return
 	var dist := global_position.distance_to(player.global_position)
 	if dist <= attack_range:
 		var dir := (player.global_position - global_position).normalized()
@@ -1682,9 +1687,13 @@ func _die() -> void:
 		if is_instance_valid(self): queue_free()
 	, CONNECT_ONE_SHOT)
 
+	_slowmo_count += 1
 	Engine.time_scale = 0.15
 	await get_tree().create_timer(0.18, true, false, true).timeout
-	Engine.time_scale = 1.0
+	_slowmo_count -= 1
+	if _slowmo_count <= 0:
+		_slowmo_count = 0
+		Engine.time_scale = 1.0
 	var tween := create_tween()
 	var visual := goblin_mesh if goblin_mesh != null else self
 	if death_roll >= 0.8:
@@ -1695,7 +1704,7 @@ func _die() -> void:
 		tween.tween_property(visual, "scale", Vector3.ZERO, 0.25)
 	await tween.finished
 	if not is_instance_valid(self): return
-	if player and player.has_method("add_combo_kill"):
+	if is_instance_valid(player) and player.has_method("add_combo_kill"):
 		player.add_combo_kill()
 	var hud = get_tree().get_first_node_in_group("hud")
 	if hud and hud.has_method("register_kill"):

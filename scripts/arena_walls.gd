@@ -22,6 +22,7 @@ func _apply_floor_shader() -> void:
 	# O mesh "Arena" dentro do GLB importado é o chão principal
 	var floor_node := model.find_child("Arena", true, false) as MeshInstance3D
 	if floor_node == null:
+		push_warning("ArenaWalls: MeshInstance3D 'Arena' não encontrado em ArenaModel — shader de chão não aplicado")
 		return
 	# Preserva a textura/cor original — só deixa o chão úmido (baixo roughness, alto specular)
 	for s in floor_node.mesh.get_surface_count():

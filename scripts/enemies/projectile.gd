@@ -7,6 +7,9 @@ const GRAVITY: float = 9.8
 
 func _ready() -> void:
 	$HitArea.body_entered.connect(_on_body_entered)
+	get_tree().create_timer(_lifetime).timeout.connect(func():
+		if is_instance_valid(self): queue_free()
+	)
 
 func launch(origin: Vector3, target_pos: Vector3, speed: float) -> void:
 	global_position = origin
@@ -22,10 +25,6 @@ func launch(origin: Vector3, target_pos: Vector3, speed: float) -> void:
 	_velocity = Vector3(dir_h.x * speed, vy, dir_h.z * speed)
 
 func _process(delta: float) -> void:
-	_lifetime -= delta
-	if _lifetime <= 0.0:
-		queue_free()
-		return
 	_velocity.y -= GRAVITY * delta
 	global_position += _velocity * delta
 	if _velocity.length_squared() > 0.01:

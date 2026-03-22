@@ -51,6 +51,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _open() -> void:
 	_opened = true
 	_prompt.visible = false
+	set_process_unhandled_input(false)
 	# Lid tween
 	if _lid:
 		var lt := create_tween()

@@ -11,6 +11,7 @@ var coins: int = 0
 func start_game() -> void:
 	kills = 0
 	wave = 0
+	coins = 0
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 func pause(paused: bool) -> void:

@@ -17,7 +17,7 @@ func _ready() -> void:
 		prompt_label.visible = false
 
 func _process(_delta: float) -> void:
-	if is_picked_up or player == null:
+	if is_picked_up or not is_instance_valid(player):
 		return
 
 	var dist := global_position.distance_to(player.global_position)

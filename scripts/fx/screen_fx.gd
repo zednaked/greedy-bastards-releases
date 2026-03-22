@@ -3,6 +3,10 @@
 ## Acesso: ScreenFX.trigger_hit_flash() / ScreenFX.trigger_attack()
 extends CanvasLayer
 
+const PARAM_TIME        := &"time"
+const PARAM_HIT_FLASH   := &"hit_flash"
+const PARAM_ABERRATION  := &"aberration"
+
 var _mat: ShaderMaterial = null
 var _hit_timer     := 0.0
 var _aberration    := 0.0
@@ -30,19 +34,19 @@ func _process(delta: float) -> void:
 	if _mat == null:
 		return
 
-	_mat.set_shader_parameter("time", Time.get_ticks_msec() * 0.001)
+	_mat.set_shader_parameter(PARAM_TIME, Time.get_ticks_msec() * 0.001)
 
 	# Hit flash — decai em 0.55s
 	if _hit_timer > 0.0:
 		_hit_timer = maxf(0.0, _hit_timer - delta)
-		_mat.set_shader_parameter("hit_flash", _hit_timer / 0.55)
+		_mat.set_shader_parameter(PARAM_HIT_FLASH, _hit_timer / 0.55)
 	else:
-		_mat.set_shader_parameter("hit_flash", 0.0)
+		_mat.set_shader_parameter(PARAM_HIT_FLASH, 0.0)
 
 	# Chromatic aberration — decai suavemente
 	_aberration = lerpf(_aberration, _target_aber, delta * 7.0)
 	_target_aber = lerpf(_target_aber, 0.0, delta * 4.5)
-	_mat.set_shader_parameter("aberration", _aberration)
+	_mat.set_shader_parameter(PARAM_ABERRATION, _aberration)
 
 ## Chamado quando o player toma dano. intensity 0–1.
 func trigger_hit_flash(intensity: float = 1.0) -> void:
