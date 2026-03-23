@@ -5,6 +5,7 @@ const JUMP_VELOCITY = 4.5
 const MOUSE_SENSITIVITY = 0.002
 const GRAVITY = 9.8
 const ARENA_RADIUS: float = 20.8  # wall_radius(21) - margem do jogador
+const _PAUSE_SCENE = preload("res://scenes/ui/pause.tscn")
 
 @export_group("Head Bob")
 @export var bob_freq: float = 2.2
@@ -81,6 +82,7 @@ var _cam_punch_vz: float = 0.0
 # Coyote & jump buffer
 var _coyote_timer: float = 0.0
 var _jump_buffer_timer: float = 0.0
+var _air_jumps_left: int = 1
 
 # Combo
 var _combo: int = 0
@@ -116,8 +118,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):
 		if not get_tree().paused:
 			get_tree().paused = true
-			var pause_scene := load("res://scenes/ui/pause.tscn") as PackedScene
-			get_tree().current_scene.add_child(pause_scene.instantiate())
+			get_tree().current_scene.add_child(_PAUSE_SCENE.instantiate())
 		return
 
 	if event.is_action_pressed("jump"):
@@ -149,6 +150,7 @@ func _physics_process(delta: float) -> void:
 
 	# Land detection — impulso proporcional à queda
 	if is_on_floor() and not _was_on_floor:
+		_air_jumps_left = 1
 		var impact := clampf(-_fall_vel, 0.0, 15.0)
 		_land_offset = impact * land_pos_scale
 		_vx += impact * land_rx_scale
@@ -169,6 +171,12 @@ func _physics_process(delta: float) -> void:
 		_coyote_timer = 0.0
 		_vx -= jump_kick
 		_land_offset += 0.04
+	elif _jump_buffer_timer > 0.0 and not can_jump and _air_jumps_left > 0:
+		velocity.y = JUMP_VELOCITY * 0.97
+		_jump_buffer_timer = 0.0
+		_air_jumps_left -= 1
+		_vx -= jump_kick * 0.95
+		_spawn_double_jump_fx()
 
 	if _dash_timer > 0.0:
 		_dash_timer -= delta
@@ -257,7 +265,8 @@ func _spawn_dash_streaks() -> void:
 		var offset := perp * randf_range(-0.75, 0.75) + Vector3.UP * randf_range(0.4, 1.5)
 		streak.global_position = global_position + offset
 		if (_dash_dir + offset.normalized()).length() > 0.01:
-			streak.look_at(streak.global_position + _dash_dir, Vector3.UP)
+			var up := Vector3.RIGHT if abs(_dash_dir.dot(Vector3.UP)) > 0.9 else Vector3.UP
+			streak.look_at(streak.global_position + _dash_dir, up)
 		var fly_dist := randf_range(2.5, 5.5)
 		var fly_dur := randf_range(0.13, 0.22)
 		var t := streak.create_tween().set_parallel(true)
@@ -288,6 +297,54 @@ func _spawn_dash_dust() -> void:
 	ps.emitting = true
 	get_tree().current_scene.add_child(ps)
 	ps.global_position = global_position + Vector3(0.0, 0.12, 0.0)
+	ps.finished.connect(func(): if is_instance_valid(ps): ps.queue_free())
+
+func _spawn_double_jump_fx() -> void:
+	# Anel de ar expandindo nos pés
+	var ring := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius    = 0.05
+	cyl.bottom_radius = 0.05
+	cyl.height        = 0.04
+	ring.mesh = cyl
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(0.55, 0.85, 1.0, 0.9)
+	mat.emission_enabled = true
+	mat.emission = Color(0.3, 0.7, 1.0)
+	mat.emission_energy_multiplier = 2.5
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	ring.material_override = mat
+	get_tree().current_scene.add_child(ring)
+	ring.global_position = global_position + Vector3(0.0, 0.15, 0.0)
+	var t := ring.create_tween().set_parallel(true)
+	t.tween_property(ring, "scale", Vector3(2.2, 0.06, 2.2), 0.22)\
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+	t.tween_property(mat, "albedo_color:a", 0.0, 0.22)\
+		.set_ease(Tween.EASE_IN)
+	t.chain().tween_callback(func(): if is_instance_valid(ring): ring.queue_free())
+
+	# Burst de partículas para baixo
+	var ps := GPUParticles3D.new()
+	var pm := ParticleProcessMaterial.new()
+	pm.direction = Vector3.DOWN
+	pm.spread = 60.0
+	pm.initial_velocity_min = 3.0
+	pm.initial_velocity_max = 9.0
+	pm.gravity = Vector3(0.0, -12.0, 0.0)
+	pm.scale_min = 0.04
+	pm.scale_max = 0.14
+	pm.color = Color(0.5, 0.85, 1.0, 0.9)
+	pm.collision_mode = ParticleProcessMaterial.COLLISION_DISABLED
+	ps.process_material = pm
+	ps.amount = 20
+	ps.lifetime = 0.4
+	ps.one_shot = true
+	ps.explosiveness = 0.95
+	ps.emitting = true
+	get_tree().current_scene.add_child(ps)
+	ps.global_position = global_position + Vector3(0.0, 0.2, 0.0)
 	ps.finished.connect(func(): if is_instance_valid(ps): ps.queue_free())
 
 func _update_camera(delta: float) -> void:
@@ -438,6 +495,16 @@ func add_coins(amount: int) -> void:
 	if hud and hud.has_method("set_coins"):
 		hud.set_coins(coins)
 
+## Retorna o script da arma equipada (weapon_pivot ou seu primeiro filho)
+func _get_weapon_script() -> Node:
+	if weapon_pivot == null:
+		return null
+	if weapon_pivot.get_script() != null:
+		return weapon_pivot
+	if weapon_pivot.get_child_count() > 0:
+		return weapon_pivot.get_child(0)
+	return null
+
 func apply_upgrade(upgrade_id: String) -> void:
 	match upgrade_id:
 		"heal":
@@ -448,32 +515,21 @@ func apply_upgrade(upgrade_id: String) -> void:
 			health = max_health
 			_notify_hud_health(false)
 		"atk_speed":
-			# Reduce sword attack cooldown — weapon_pivot holds the sword_attack script
-			if weapon_pivot and "attack_cooldown_time" in weapon_pivot:
-				weapon_pivot.attack_cooldown_time = maxf(0.05, weapon_pivot.attack_cooldown_time * 0.85)
-			else:
-				# Try first child of weapon_pivot
-				var sword := weapon_pivot.get_child(0) if weapon_pivot.get_child_count() > 0 else null
-				if sword and "attack_cooldown_time" in sword:
-					sword.attack_cooldown_time = maxf(0.05, sword.attack_cooldown_time * 0.85)
+			var sword := _get_weapon_script()
+			if sword and "attack_cooldown_time" in sword:
+				sword.attack_cooldown_time = maxf(0.05, sword.attack_cooldown_time * 0.85)
 		"knockback":
-			if weapon_pivot and "knockback_force" in weapon_pivot:
-				weapon_pivot.knockback_force *= 1.25
-			else:
-				var sword := weapon_pivot.get_child(0) if weapon_pivot.get_child_count() > 0 else null
-				if sword and "knockback_force" in sword:
-					sword.knockback_force *= 1.25
+			var sword := _get_weapon_script()
+			if sword and "knockback_force" in sword:
+				sword.knockback_force *= 1.25
 		"dash_cd":
 			dash_cooldown_time = maxf(0.15, dash_cooldown_time - 0.12)
 		"iframes":
 			invincibility_time += 0.3
 		"lunge":
-			if weapon_pivot and "lunge_force" in weapon_pivot:
-				weapon_pivot.lunge_force += 3.0
-			else:
-				var sword := weapon_pivot.get_child(0) if weapon_pivot.get_child_count() > 0 else null
-				if sword and "lunge_force" in sword:
-					sword.lunge_force += 3.0
+			var sword := _get_weapon_script()
+			if sword and "lunge_force" in sword:
+				sword.lunge_force += 3.0
 		"bloodlust":
 			set_meta("bloodlust_unlocked", true)
 		"magnet":

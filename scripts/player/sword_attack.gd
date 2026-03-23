@@ -42,7 +42,7 @@ extends Node3D
 @export_group("Arremesso")
 @export var throw_speed: float = 22.0
 @export var throw_damage_knockback: float = 25.0
-@export var throw_pickup_range: float = 2.5
+@export var throw_pickup_range: float = 4.5
 
 const REST_POS := Vector3(-0.15, 0.05, 0.1)
 const REST_ROT := Vector3(0.0, deg_to_rad(80.0), deg_to_rad(-15.0))
@@ -70,6 +70,7 @@ var _hit_bodies: Dictionary = {}  # body → true, O(1) lookup
 
 var _attack_buffered: bool = false
 var _buffer_age: float = 0.0
+var _hit_stop_active: bool = false
 
 var _lunge_timer: float = 0.0
 var _lunge_dir: Vector3 = Vector3.ZERO
@@ -89,6 +90,9 @@ var _sword_glow_mat: ShaderMaterial = null
 var has_weapon: bool = true
 var _thrown: RigidBody3D = null
 var _throw_label: Label3D = null
+var _is_recalling: bool = false
+var _recall_dir: Vector3 = Vector3.ZERO
+var _sword_streak_timer: float = 0.0
 
 func _ready() -> void:
 	hitbox.monitoring = false
@@ -122,11 +126,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
-			# RMB: arremessa se tem arma, senão ignora
 			if has_weapon:
 				_throw_sword()
+			elif _thrown != null and not _is_recalling:
+				_recall_sword()
 			return
 		if not has_weapon:
+			if event.button_index == MOUSE_BUTTON_LEFT and _thrown != null and not _is_recalling:
+				_detonate_sword()
 			return
 		if attack_cooldown <= 0.0:
 			var can_fire := not is_attacking or _is_flick
@@ -186,11 +193,30 @@ func _process(delta: float) -> void:
 		mouse_peak  = Vector2.ZERO
 		accum_timer = 0.0
 
-	# Prompt de pickup
-	if _throw_label != null and is_instance_valid(_throw_label) and _thrown != null:
-		if is_instance_valid(_thrown) and _thrown.get_meta("landed", false):
+	# Streaks da espada em voo / recall
+	if _thrown != null and is_instance_valid(_thrown):
+		_sword_streak_timer -= delta
+		if _sword_streak_timer <= 0.0:
+			_sword_streak_timer = 0.05
+			var sdir: Vector3
+			if _is_recalling:
+				sdir = _recall_dir
+			elif not _thrown.get_meta("landed", false):
+				sdir = _thrown.linear_velocity.normalized()
+			else:
+				sdir = Vector3.ZERO
+			if sdir.length_squared() > 0.01:
+				_spawn_sword_streaks(_thrown.global_position, sdir)
+
+	# Prompt de pickup e auto-pickup por proximidade
+	if _thrown != null and is_instance_valid(_thrown) and not _is_recalling:
+		if _thrown.get_meta("landed", false):
 			var dist := player.global_position.distance_to(_thrown.global_position)
-			_throw_label.visible = dist <= throw_pickup_range
+			if _throw_label != null and is_instance_valid(_throw_label):
+				_throw_label.visible = dist <= throw_pickup_range
+			if dist <= 1.5:
+				_return_sword()
+				return
 
 	if hitbox.monitoring:
 		for body in hitbox.get_overlapping_bodies():
@@ -234,7 +260,7 @@ func _throw_sword() -> void:
 
 	# Prompt de pickup
 	_throw_label = Label3D.new()
-	_throw_label.text = "[E] Pegar espada"
+	_throw_label.text = "[E] Pegar  [RMB] Chamar"
 	_throw_label.pixel_size = 0.004
 	_throw_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_throw_label.visible = false
@@ -250,12 +276,12 @@ func _throw_sword() -> void:
 	_thrown.linear_velocity  = dir * throw_speed
 	_thrown.angular_velocity = Vector3(randf_range(-10.0, 10.0), 0.0, randf_range(-4.0, 4.0))
 
-	# Conecta colisão — ignora player
+	# Conecta colisão — ignora player; one-shot para evitar acúmulo de callbacks
 	_thrown.body_entered.connect(func(body: Node):
 		if body.is_in_group("player"):
 			return
 		_on_thrown_hit(body)
-	)
+	, CONNECT_ONE_SHOT)
 
 	# Cleanup de segurança após 30s
 	get_tree().create_timer(30.0, true).timeout.connect(func():
@@ -269,6 +295,8 @@ func _throw_sword() -> void:
 	)
 
 func _on_thrown_hit(body: Node) -> void:
+	if _is_recalling:
+		return
 	if _thrown == null or not is_instance_valid(_thrown):
 		return
 	if _thrown.get_meta("landed", false):
@@ -280,11 +308,32 @@ func _on_thrown_hit(body: Node) -> void:
 		body.take_hit(dir * throw_damage_knockback)
 
 	# Para e espera pickup
+	var impact_dir := _thrown.linear_velocity.normalized()
+	var impact_pos := _thrown.global_position
 	_thrown.freeze = true
 	_thrown.linear_velocity  = Vector3.ZERO
 	_thrown.angular_velocity = Vector3.ZERO
 
+	_spawn_throw_impact(impact_pos, impact_dir)
+
+func _recall_sword() -> void:
+	if _thrown == null or not is_instance_valid(_thrown):
+		return
+	_is_recalling = true
+	_thrown.freeze = true
+	_thrown.linear_velocity = Vector3.ZERO
+	_thrown.angular_velocity = Vector3.ZERO
+	if _throw_label != null and is_instance_valid(_throw_label):
+		_throw_label.visible = false
+	var target := player.global_position + Vector3(0.0, 1.2, 0.0)
+	_recall_dir = (target - _thrown.global_position).normalized()
+	var tw := create_tween()
+	tw.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(_thrown, "global_position", target, 0.28)
+	tw.tween_callback(_return_sword)
+
 func _return_sword() -> void:
+	_is_recalling = false
 	if _thrown != null and is_instance_valid(_thrown):
 		_thrown.queue_free()
 	_thrown = null
@@ -293,6 +342,248 @@ func _return_sword() -> void:
 	weapon_mesh.visible = true
 	spring_pos = REST_POS
 	spring_vel = Vector3.ZERO
+
+func _detonate_sword() -> void:
+	if _thrown == null or not is_instance_valid(_thrown):
+		return
+	var pos := _thrown.global_position
+	_is_recalling = true
+	_thrown.queue_free()
+	_thrown = null
+	_throw_label = null
+
+	_spawn_detonation_fx(pos)
+	_detonate_damage(pos)
+
+	if player and player.has_method("add_trauma"):
+		var dist := player.global_position.distance_to(pos)
+		player.add_trauma(clampf(1.0 - dist / 12.0, 0.0, 0.75))
+
+	var tw := create_tween()
+	tw.tween_interval(0.38)
+	tw.tween_callback(func():
+		_is_recalling = false
+		has_weapon = true
+		weapon_mesh.visible = true
+		weapon_mesh.scale = Vector3.ZERO
+		spring_pos = REST_POS
+		spring_vel = Vector3.ZERO
+		var pop := create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+		pop.tween_property(weapon_mesh, "scale", Vector3.ONE, 0.22)
+	)
+
+func _detonate_damage(pos: Vector3) -> void:
+	const RADIUS := 4.5
+	const FORCE  := 28.0
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		var e := enemy as Node3D
+		if e == null:
+			continue
+		var dist := e.global_position.distance_to(pos)
+		if dist <= RADIUS and enemy.has_method("take_hit"):
+			var dir := (e.global_position - pos).normalized()
+			enemy.take_hit((dir + Vector3.UP * 0.4).normalized() * FORCE)
+
+func _spawn_detonation_fx(pos: Vector3) -> void:
+	const R := 5.0
+	var scene := get_tree().current_scene
+
+	# ── 1. Luz pontual ────────────────────────────────────────────────────────
+	var light := OmniLight3D.new()
+	light.light_color    = Color(0.75, 0.92, 1.0)
+	light.light_energy   = 22.0
+	light.omni_range     = R * 5.0
+	light.shadow_enabled = false
+	scene.add_child(light)
+	light.global_position = pos + Vector3(0.0, 0.6, 0.0)
+	var lt := light.create_tween()
+	lt.tween_property(light, "light_energy", 0.0, 0.5).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	lt.tween_callback(func(): if is_instance_valid(light): light.queue_free())
+
+	# ── 2. Esferas concêntricas que crescem e somem ───────────────────────────
+	var spheres: Array[Dictionary] = [
+		{"scale": R * 2.6, "dur": 0.30, "color": Color(0.65, 0.90, 1.0, 0.85), "emit": Color(0.2, 0.65, 1.0),  "delay": 0.00},
+		{"scale": R * 1.5, "dur": 0.22, "color": Color(1.0,  1.0,  1.0, 0.95), "emit": Color(0.75, 0.92, 1.0), "delay": 0.04},
+		{"scale": R * 0.8, "dur": 0.16, "color": Color(1.0,  0.88, 0.5, 0.90), "emit": Color(1.0,  0.68, 0.15),"delay": 0.08},
+	]
+	for s in spheres:
+		var fb := MeshInstance3D.new()
+		var sm := SphereMesh.new()
+		sm.radius = 0.12; sm.height = 0.24
+		fb.mesh = sm
+		var fm := StandardMaterial3D.new()
+		fm.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+		fm.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
+		fm.albedo_color              = s.color
+		fm.emission_enabled          = true
+		fm.emission                  = s.emit
+		fm.emission_energy_multiplier = 7.0
+		fm.cull_mode                 = BaseMaterial3D.CULL_DISABLED
+		fb.material_override = fm
+		scene.add_child(fb)
+		fb.global_position = pos + Vector3(0.0, 0.5, 0.0)
+		var ft := fb.create_tween().set_parallel(true)
+		if s.delay > 0.0:
+			ft.tween_interval(s.delay)
+		ft.tween_property(fb, "scale", Vector3.ONE * s.scale, s.dur)\
+			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+		ft.tween_property(fm, "albedo_color:a", 0.0, s.dur + 0.06)\
+			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		ft.chain().tween_callback(func(): if is_instance_valid(fb): fb.queue_free())
+
+	# ── 3. Anel de shockwave no chão ──────────────────────────────────────────
+	var ring := MeshInstance3D.new()
+	var r_mesh := CylinderMesh.new()
+	r_mesh.top_radius = 0.07; r_mesh.bottom_radius = 0.07; r_mesh.height = 0.05
+	ring.mesh = r_mesh
+	var r_mat := StandardMaterial3D.new()
+	r_mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+	r_mat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
+	r_mat.albedo_color              = Color(0.55, 0.88, 1.0, 0.95)
+	r_mat.emission_enabled          = true
+	r_mat.emission                  = Color(0.2, 0.65, 1.0)
+	r_mat.emission_energy_multiplier = 5.0
+	r_mat.cull_mode                 = BaseMaterial3D.CULL_DISABLED
+	ring.material_override = r_mat
+	scene.add_child(ring)
+	ring.global_position = pos + Vector3(0.0, 0.08, 0.0)
+	var rt := ring.create_tween().set_parallel(true)
+	rt.tween_property(ring, "scale", Vector3(R * 3.2, 0.05, R * 3.2), 0.42)\
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+	rt.tween_property(r_mat, "albedo_color:a", 0.0, 0.42)\
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
+	rt.chain().tween_callback(func(): if is_instance_valid(ring): ring.queue_free())
+
+	# ── 4. Burst de partículas ────────────────────────────────────────────────
+	var ps := GPUParticles3D.new()
+	var pm := ParticleProcessMaterial.new()
+	pm.direction            = Vector3.UP
+	pm.spread               = 80.0
+	pm.initial_velocity_min = 6.0
+	pm.initial_velocity_max = 22.0
+	pm.gravity              = Vector3(0.0, -10.0, 0.0)
+	pm.scale_min            = 0.10
+	pm.scale_max            = 0.42
+	pm.color                = Color(0.55, 0.88, 1.0)
+	pm.collision_mode       = ParticleProcessMaterial.COLLISION_DISABLED
+	ps.process_material = pm
+	ps.amount        = 70
+	ps.lifetime      = 0.75
+	ps.one_shot      = true
+	ps.explosiveness = 0.97
+	ps.emitting      = true
+	scene.add_child(ps)
+	ps.global_position = pos + Vector3(0.0, 0.3, 0.0)
+	ps.finished.connect(func(): if is_instance_valid(ps): ps.queue_free())
+
+	# ── 5. Flash de tela ──────────────────────────────────────────────────────
+	var hud := get_tree().get_first_node_in_group("hud")
+	if hud and hud.has_method("flash_explosion"):
+		hud.flash_explosion(0.7)
+
+func _spawn_throw_impact(pos: Vector3, dir: Vector3) -> void:
+	var scene := get_tree().current_scene
+
+	# ── 1. Burst de faíscas omnidirecional ────────────────────────────────────
+	var ps := GPUParticles3D.new()
+	var pm := ParticleProcessMaterial.new()
+	pm.direction = Vector3.UP
+	pm.spread = 180.0
+	pm.initial_velocity_min = 6.0
+	pm.initial_velocity_max = 22.0
+	pm.gravity = Vector3(0.0, -18.0, 0.0)
+	pm.scale_min = 0.06
+	pm.scale_max = 0.22
+	pm.color = Color(1.0, 0.88, 0.45)
+	pm.collision_mode = ParticleProcessMaterial.COLLISION_DISABLED
+	ps.process_material = pm
+	ps.amount = 48
+	ps.lifetime = 0.55
+	ps.one_shot = true
+	ps.explosiveness = 0.99
+	ps.emitting = true
+	scene.add_child(ps)
+	ps.global_position = pos
+	ps.finished.connect(func(): if is_instance_valid(ps): ps.queue_free())
+	get_tree().create_timer(2.0).timeout.connect(func(): if is_instance_valid(ps): ps.queue_free())
+
+	# ── 2. Anel de impacto expandindo ─────────────────────────────────────────
+	var ring := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius    = 0.06
+	cyl.bottom_radius = 0.06
+	cyl.height        = 0.05
+	ring.mesh = cyl
+	var r_mat := StandardMaterial3D.new()
+	r_mat.transparency         = BaseMaterial3D.TRANSPARENCY_ALPHA
+	r_mat.shading_mode         = BaseMaterial3D.SHADING_MODE_UNSHADED
+	r_mat.albedo_color         = Color(1.0, 0.82, 0.3, 1.0)
+	r_mat.emission_enabled     = true
+	r_mat.emission             = Color(1.0, 0.65, 0.1)
+	r_mat.emission_energy_multiplier = 4.0
+	r_mat.cull_mode            = BaseMaterial3D.CULL_DISABLED
+	ring.material_override = r_mat
+	scene.add_child(ring)
+	ring.global_position = pos + Vector3(0.0, 0.05, 0.0)
+	var rt := create_tween().set_parallel(true)
+	rt.tween_property(ring, "scale", Vector3(3.2, 0.08, 3.2), 0.28)\
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+	rt.tween_property(r_mat, "albedo_color:a", 0.0, 0.28)\
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+	rt.chain().tween_callback(func(): if is_instance_valid(ring): ring.queue_free())
+
+	# ── 3. Flash de luz pontual ────────────────────────────────────────────────
+	var light := OmniLight3D.new()
+	light.light_color  = Color(1.0, 0.75, 0.3)
+	light.light_energy = 8.0
+	light.omni_range   = 5.0
+	light.shadow_enabled = false
+	scene.add_child(light)
+	light.global_position = pos + Vector3(0.0, 0.3, 0.0)
+	var lt := create_tween()
+	lt.tween_property(light, "light_energy", 0.0, 0.22).set_ease(Tween.EASE_OUT)
+	lt.tween_callback(func(): if is_instance_valid(light): light.queue_free())
+
+	# ── 4. Trauma de câmera ────────────────────────────────────────────────────
+	if player and player.has_method("add_trauma"):
+		var dist := player.global_position.distance_to(pos)
+		var trauma := clampf(1.0 - dist / 10.0, 0.0, 0.5)
+		if trauma > 0.05:
+			player.add_trauma(trauma)
+
+func _spawn_sword_streaks(pos: Vector3, dir: Vector3) -> void:
+	var scene := get_tree().current_scene
+	var perp := dir.cross(Vector3.UP)
+	if perp.length_squared() < 0.001:
+		perp = dir.cross(Vector3.RIGHT)
+	perp = perp.normalized()
+	for i in 3:
+		var streak := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.012, 0.012, randf_range(0.22, 0.60))
+		streak.mesh = bm
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.albedo_color = Color(1.0, 0.88, 0.55, 0.9)
+		mat.emission_enabled = true
+		mat.emission = Color(1.0, 0.72, 0.2)
+		mat.emission_energy_multiplier = 2.2
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		streak.material_override = mat
+		scene.add_child(streak)
+		var offset := perp * randf_range(-0.07, 0.07) + Vector3.UP * randf_range(-0.07, 0.07)
+		streak.global_position = pos + offset
+		var up := Vector3.RIGHT if abs(dir.dot(Vector3.UP)) > 0.9 else Vector3.UP
+		streak.look_at(streak.global_position + dir, up)
+		var fly_dist := randf_range(0.35, 1.0)
+		var fly_dur  := randf_range(0.07, 0.15)
+		var t := streak.create_tween().set_parallel(true)
+		t.tween_property(streak, "global_position",
+				streak.global_position - dir * fly_dist, fly_dur)\
+				.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_EXPO)
+		t.tween_property(mat, "albedo_color:a", 0.0, fly_dur + 0.03)
+		t.chain().tween_callback(func(): if is_instance_valid(streak): streak.queue_free())
 
 # ─── Spring / Sway ────────────────────────────────────────────────────────────
 
@@ -636,9 +927,13 @@ func _on_hit(body: Node3D) -> void:
 			player.add_trauma(0.55 if is_parry else (0.45 if is_kill else 0.32))
 
 func _do_hit_stop(duration: float) -> void:
+	if _hit_stop_active:
+		return
+	_hit_stop_active = true
 	Engine.time_scale = 0.0
 	await get_tree().create_timer(duration, true, false, true).timeout
 	Engine.time_scale = 1.0
+	_hit_stop_active = false
 
 func _spawn_impact_sparks(origin: Vector3, hit_dir: Vector3, is_parry: bool = false) -> void:
 	var ps := GPUParticles3D.new()

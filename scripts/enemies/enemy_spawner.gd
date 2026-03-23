@@ -122,6 +122,9 @@ func _spawn_one() -> void:
 			pos = _player.global_position + Vector3(cos(angle), 0.0, sin(angle)) * radius
 			pos.y = _player.global_position.y + 0.1
 			attempts += 1
+		# Se todas as posições aleatórias estão bloqueadas, usa cage como fallback
+		if _is_blocked(pos) and not _cages.is_empty():
+			pos = _get_cage_spawn()
 
 	var enemy := goblin_scene.instantiate()
 	get_tree().current_scene.add_child(enemy)

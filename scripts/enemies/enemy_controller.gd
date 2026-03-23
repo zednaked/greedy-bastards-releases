@@ -16,6 +16,7 @@ class_name EnemyController
 @export var projectile_scene: PackedScene
 @export var bomb_scene: PackedScene
 @export var trap_scene: PackedScene
+@export var poison_bomb_scene: PackedScene
 
 @export_group("Animação Esqueletal")
 @export var walk_leg_swing: float = 0.55
@@ -140,6 +141,7 @@ var _taunt_cooldown: float = 0.0
 # ─── Sistema Q — Throw / Kite ─────────────────────────────────────────────────
 @export var is_ranged: bool = false
 @export var is_bomber: bool = false
+@export var is_gas_bomber: bool = false
 @export var is_trapper: bool = false
 @export var throw_range_min: float = 7.0
 @export var throw_range_max: float = 16.0
@@ -222,6 +224,8 @@ var _hit_flash_mat: StandardMaterial3D
 # Texturas pré-carregadas — evita I/O síncrono em cada hit
 static var _blood_textures: Array = []
 static var _textures_loaded := false
+# ORM de "poça molhada" — projetada pelo Decal para dar brilho úmido só onde há sangue
+static var _blood_wet_orm: ImageTexture = null
 
 # Cache da lista de inimigos para separação — refresh a cada 0.15s
 static var _enemy_cache: Array = []
@@ -597,7 +601,7 @@ func _physics_process(delta: float) -> void:
 			move_and_slide()
 			return
 
-	# Watchdog: se o goblin não se mover por 2s, libera estados e aplica impulso de fuga.
+	# Watchdog: se o goblin não se mover por 1.5s, libera estados e aplica impulso de fuga.
 	# Estados intencionalmente parados são ignorados (cower, taunt, howl, guard, dead).
 	if not is_dead:
 		_freeze_watch_timer += delta
@@ -664,6 +668,28 @@ func _physics_process(delta: float) -> void:
 				_retreat_timer = randf_range(1.5, 3.0)
 		elif distance <= 18.0 and _bomb_cooldown <= 0.0:
 			_start_throw_bomb()
+		elif distance <= 18.0:
+			_move_circling(delta)
+		else:
+			var dir: Vector3 = (player.global_position - global_position).normalized()
+			dir.y = 0.0
+			velocity.x = dir.x * speed
+			velocity.z = dir.z * speed
+			_animate_run(delta)
+		_sep_frame = (_sep_frame + 1) % 3
+		if _sep_frame == 0:
+			_apply_separation()
+		move_and_slide()
+		return
+
+	# Gas Bomber: same kiting as bomber but throws poison bombs
+	if is_gas_bomber:
+		if distance < 6.0:
+			if not is_retreating:
+				is_retreating = true
+				_retreat_timer = randf_range(1.5, 3.0)
+		elif distance <= 18.0 and _bomb_cooldown <= 0.0:
+			_start_throw_poison_bomb()
 		elif distance <= 18.0:
 			_move_circling(delta)
 		else:
@@ -904,7 +930,7 @@ func _start_throw() -> void:
 		_sb("coluna", Quaternion(Vector3.RIGHT, 0.18))
 
 	await get_tree().create_timer(0.38, true).timeout
-	if is_dead or not is_instance_valid(self):
+	if is_dead or not is_throwing or not is_instance_valid(self):
 		is_throwing = false
 		return
 
@@ -1098,7 +1124,7 @@ func _start_throw_bomb() -> void:
 		_sb("clav.R", Quaternion(Vector3.FORWARD, 0.45))
 		_sb("coluna", Quaternion(Vector3.RIGHT, 0.2))
 	await get_tree().create_timer(0.5, true).timeout
-	if is_dead or not is_instance_valid(self):
+	if is_dead or not is_throwing or not is_instance_valid(self):
 		is_throwing = false
 		return
 	_launch_bomb()
@@ -1124,6 +1150,46 @@ func _launch_bomb() -> void:
 	var offset := Vector3(randf_range(-2.0, 2.0), 0.0, randf_range(-2.0, 2.0))
 	var target := player.global_position + offset
 	bomb.launch(origin, target, 12.0)
+
+# ─── Gas Bomber ───────────────────────────────────────────────────────────────
+
+func _start_throw_poison_bomb() -> void:
+	if is_dead or not is_instance_valid(player): return
+	is_throwing = true
+	_bomb_cooldown = randf_range(6.0, 11.0)
+	velocity.x = 0.0
+	velocity.z = 0.0
+	if _skeleton:
+		_sb("bra.R",  Quaternion(Vector3.FORWARD, 1.3))
+		_sb("clav.R", Quaternion(Vector3.FORWARD, 0.45))
+		_sb("coluna", Quaternion(Vector3.RIGHT, 0.2))
+	await get_tree().create_timer(0.5, true).timeout
+	if is_dead or not is_throwing or not is_instance_valid(self):
+		is_throwing = false
+		return
+	_launch_poison_bomb()
+	if _skeleton:
+		_sb("bra.R",  Quaternion.IDENTITY)
+		_sb("clav.R", Quaternion.IDENTITY)
+		_sb("coluna", Quaternion.IDENTITY)
+	await get_tree().create_timer(0.35, true).timeout
+	if is_dead or not is_instance_valid(self):
+		is_throwing = false
+		return
+	is_throwing = false
+
+func _launch_poison_bomb() -> void:
+	if not is_instance_valid(player): return
+	var pb_scene := poison_bomb_scene
+	if pb_scene == null:
+		pb_scene = load("res://scenes/enemies/poison_bomb.tscn") as PackedScene
+	if pb_scene == null: return
+	var bomb := pb_scene.instantiate()
+	get_tree().current_scene.add_child(bomb)
+	var origin := global_position + Vector3(0.0, 1.4, 0.0)
+	var offset := Vector3(randf_range(-1.5, 1.5), 0.0, randf_range(-1.5, 1.5))
+	var target := player.global_position + offset
+	bomb.launch(origin, target, 11.0)
 
 # ─── Trapper ──────────────────────────────────────────────────────────────────
 
@@ -1507,6 +1573,7 @@ func take_hit(knockback: Vector3) -> void:
 	is_feinting  = false
 	is_howling   = false
 	is_jumping   = false
+	is_throwing  = false
 	health -= 1
 	var hit_dir := knockback.normalized() if knockback.length_squared() > 0.0001 else Vector3.BACK
 	_play_blood(-hit_dir + Vector3(0, 0.6, 0))  # spray sobe e se afasta do golpe
@@ -1605,9 +1672,13 @@ func _bounce_mesh() -> void:
 func _flash_hit() -> void:
 	_set_mesh_override(_hit_flash_mat)
 	get_tree().create_timer(0.07, true).timeout.connect(func():
-		# Trapper restaura invisibilidade após flash; outros voltam ao material padrão
+		# Restaura o material correto com prioridade: trapper > berserk/rage > leader > padrão
 		if is_trapper and _trapper_visible_timer <= 0.0:
 			_set_mesh_override(_trapper_mat)
+		elif _is_berserk or _is_raging:
+			_set_mesh_override(_rage_mat)
+		elif is_leader:
+			_set_mesh_override(_leader_mat)
 		else:
 			_set_mesh_override(null)
 	)
@@ -1690,9 +1761,8 @@ func _die() -> void:
 	_slowmo_count += 1
 	Engine.time_scale = 0.15
 	await get_tree().create_timer(0.18, true, false, true).timeout
-	_slowmo_count -= 1
-	if _slowmo_count <= 0:
-		_slowmo_count = 0
+	_slowmo_count = maxi(0, _slowmo_count - 1)
+	if _slowmo_count == 0:
 		Engine.time_scale = 1.0
 	var tween := create_tween()
 	var visual := goblin_mesh if goblin_mesh != null else self
@@ -1820,6 +1890,15 @@ func _spawn_blood_decal(min_size: float = 1.0, max_size: float = 2.2, offset: Ve
 	decal.rotation_degrees.y = randf() * 360.0
 	if _blood_textures.size() > 0:
 		decal.texture_albedo = _blood_textures[randi() % _blood_textures.size()]
+
+	# ORM com roughness muito baixo → brilho úmido projetado apenas onde o decal cobre
+	# R = occlusion (1 = sem efeito), G = roughness (0.06 = molhado), B = metallic (0)
+	if _blood_wet_orm == null:
+		var img := Image.create(4, 4, false, Image.FORMAT_RGB8)
+		img.fill(Color(1.0, 0.06, 0.0))
+		_blood_wet_orm = ImageTexture.create_from_image(img)
+	decal.texture_orm = _blood_wet_orm
+
 	get_tree().current_scene.add_child(decal)
 	var pos := global_position + offset
 	pos.y = 0.05

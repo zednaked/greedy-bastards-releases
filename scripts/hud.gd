@@ -296,6 +296,9 @@ func set_combo(n: int) -> void:
 func flash_gold_vignette() -> void:
 	_flash_vignette(Color(1.0, 0.85, 0.0, 0.55))
 
+func flash_vignette(color: Color) -> void:
+	_flash_vignette(color)
+
 func flash_explosion(intensity: float) -> void:
 	if parry_flash == null:
 		return

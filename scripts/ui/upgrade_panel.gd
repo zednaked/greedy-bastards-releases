@@ -42,10 +42,12 @@ func _ready() -> void:
 	pool.shuffle()
 	var player_hp = _player.get("health") if _player else 999
 	if player_hp != null and player_hp <= 1:
-		var heal_upg = UPGRADES[0]
-		if not pool.slice(0, 3).any(func(u): return u.id == "heal"):
-			pool.erase(heal_upg)
-			pool.push_front(heal_upg)
+		var heal_candidates := UPGRADES.filter(func(u): return u.id == "heal")
+		if not heal_candidates.is_empty():
+			var heal_upg = heal_candidates[0]
+			if not pool.slice(0, 3).any(func(u): return u.id == "heal"):
+				pool.erase(heal_upg)
+				pool.push_front(heal_upg)
 	_selected_upgrades = pool.slice(0, 3)
 
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)

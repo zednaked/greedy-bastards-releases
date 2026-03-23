@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://poison_bomb001"]
+
+[ext_resource type="Script" path="res://scripts/enemies/poison_bomb.gd" id="1_pbomb"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_1"]
+radius = 0.14
+height = 0.28
+
+[sub_resource type="StandardMaterial3D" id="Mat_1"]
+albedo_color = Color(0.08, 0.55, 0.05, 1)
+roughness = 0.7
+emission_enabled = true
+emission = Color(0.05, 0.4, 0.02)
+emission_energy_multiplier = 1.2
+
+[node name="PoisonBomb" type="Node3D"]
+script = ExtResource("1_pbomb")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+mesh = SubResource("SphereMesh_1")
+surface_material_override/0 = SubResource("Mat_1")

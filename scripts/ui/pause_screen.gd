@@ -108,6 +108,7 @@ func _input(event: InputEvent) -> void:
 		_resume()
 
 func _resume() -> void:
+	Engine.time_scale = 1.0
 	get_tree().paused = false
 	queue_free()
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)

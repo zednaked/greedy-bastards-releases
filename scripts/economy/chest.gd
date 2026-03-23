@@ -58,7 +58,9 @@ func _open() -> void:
 		lt.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 		lt.tween_property(_lid, "rotation:x", -deg_to_rad(110.0), 0.4)
 	# Show upgrade panel after lid opens
-	get_tree().create_timer(0.35).timeout.connect(_show_upgrades)
+	get_tree().create_timer(0.35).timeout.connect(func():
+		if is_instance_valid(self): _show_upgrades()
+	, CONNECT_ONE_SHOT)
 
 func _show_upgrades() -> void:
 	var panel_scene := load("res://scenes/ui/upgrade_panel.tscn") as PackedScene

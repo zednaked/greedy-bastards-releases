@@ -20,6 +20,9 @@ func launch(origin: Vector3, target_pos: Vector3, speed: float) -> void:
 func _process(delta: float) -> void:
 	_lifetime -= delta
 	if _lifetime <= 0.0:
+		# Garante que explode no chão mesmo que o timer expire ainda no ar
+		if not _landed:
+			global_position.y = 0.1
 		_explode()
 		return
 

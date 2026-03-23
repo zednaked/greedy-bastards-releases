@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://poison_cloud001"]
+
+[ext_resource type="Script" path="res://scripts/enemies/poison_cloud.gd" id="1_pcloud"]
+
+[node name="PoisonCloud" type="Node3D"]
+script = ExtResource("1_pcloud")

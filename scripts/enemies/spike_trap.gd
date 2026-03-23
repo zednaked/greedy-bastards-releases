@@ -9,6 +9,10 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	# Start nearly invisible — hard to see on ground
 	_set_alpha(0.15)
+	# Max lifetime — trap desaparece mesmo se nunca for ativada
+	get_tree().create_timer(60.0, true).timeout.connect(func():
+		if is_instance_valid(self) and not _triggered: queue_free()
+	, CONNECT_ONE_SHOT)
 
 func _set_alpha(a: float) -> void:
 	for child in get_children():
