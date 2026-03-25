@@ -4,58 +4,104 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Greedy Bastards** — Arena melee FPS in Godot 4. Player fights endless spawning goblins with a sword. Converted from a Unity VR project. No VR, standard keyboard+mouse FPS.
+**Greedy Bastards** — Arena melee FPS in Godot 4. Player fights endless spawning goblins with a sword. Co-op multiplayer for up to 4 players. Converted from a Unity VR project. No VR, standard keyboard+mouse FPS.
 
 ## Development
 
 Open `project.godot` in Godot 4.3+. No CLI build commands — use the Godot Editor. Run with F5 (Play) or F6 (Play current scene).
 
 **Main scene**: `scenes/main.tscn`
-**Input map**: W/A/S/D movement, Space jump, RMB block, E interact (weapon pickup), Escape pause/cursor release. Attack is triggered by mouse flick, not a button.
+**Input map**: W/A/S/D movement, Space jump, double-tap dash, RMB throw/block, E interact (weapon pickup), Escape pause/cursor release. Attack is triggered by mouse flick, not a button.
 
 ## Architecture
 
 ### Scene tree (`scenes/main.tscn`)
 - `Arena` — static floor + lighting (instances `scenes/arena/arena.tscn`)
 - `Player` — FPS character (instances `scenes/player/player.tscn`)
-- `EnemySpawner` — Node3D with `enemy_spawner.gd`, exports `goblin_scene`
-- `HUD` — CanvasLayer with kill counter and crosshair
+- `EnemySpawner` — Node3D with `enemy_spawner.gd`
+- `Props` — static cages and obstacles
+- `HUD` — CanvasLayer with HP, kill counter, combo, wave announcer
+- `PostProcess` — fullscreen quad with `post_process.gdshader`
 
 ### Scripts
 
 | Script | Node type | Purpose |
 |---|---|---|
-| `scripts/player/player_controller.gd` | `CharacterBody3D` | WASD+mouse FPS movement; `equip_weapon(name)` called by pickups |
-| `scripts/player/sword_attack.gd` | `Node3D` (WeaponPivot) | Mouse-flick attack detection (80ms window), block stance (RMB), spring-damper weapon sway, hitbox window |
-| `scripts/enemies/enemy_controller.gd` | `CharacterBody3D` | Follow player, 3-hit health, knockback, procedural run/idle animation, death via scale tween |
-| `scripts/enemies/enemy_spawner.gd` | `Node3D` | Spawns goblins every 5s at 20-unit radius, max 20 at once |
-| `scripts/hud.gd` | `CanvasLayer` | Kill counter; `register_kill()` called by `enemy_controller._die()` via `"hud"` group |
-| `scripts/weapon_pickup.gd` | `Node3D` | World pickup — shows prompt label within `interact_distance`, calls `player.equip_weapon()` on E press |
+| `scripts/player/player_controller.gd` | `CharacterBody3D` | WASD+mouse FPS movement, dash, HP, upgrades, multiplayer authority guards, ghost body for remote players |
+| `scripts/player/sword_attack.gd` | `Node3D` (WeaponPivot) | Mouse-flick/click attack, block/parry, lunge, weapon throw/recall/detonate; disabled for non-authority players |
+| `scripts/enemies/enemy_controller.gd` | `CharacterBody3D` | Full AI (26+ subsystems), procedural animation, puppet mode for multiplayer clients |
+| `scripts/enemies/enemy_spawner.gd` | `Node3D` | Wave state machine, spawn, difficulty scaling, chest/upgrade flow; server-authoritative in multiplayer |
+| `scripts/enemies/projectile.gd` | `Area3D` | Arcing projectile from ranged goblin |
+| `scripts/enemies/bomb.gd` | `RigidBody3D` | Bomb with fuse, area explosion, FX |
+| `scripts/hud.gd` | `CanvasLayer` | HP pips, kill counter, combo, wave announce, vignettes |
+| `scripts/ui/title_overlay.gd` | `CanvasLayer` | Title screen embedded in main.tscn; multiplayer lobby (host/join/start) |
+| `scripts/ui/upgrade_panel.gd` | `Control` | Upgrade cards between waves |
+| `scripts/ui/defeat_screen.gd` | `Control` | Defeat screen with run stats |
+| `scripts/ui/pause_screen.gd` | `Control` | Pause menu |
+| `scripts/fx/screen_fx.gd` | `CanvasLayer` | Vignettes, flashes, chromatic aberration, trauma |
+| `scripts/network_manager.gd` | **AutoLoad** | ENet host/join, player spawning via RPC, peer lifecycle; `is_multiplayer_session` flag guards all MP-specific code |
+| `scripts/arena_walls.gd` | `Node3D` | Arena boundary, repositions enemies that escape |
+| `scripts/weapon_pickup.gd` | `Node3D` | World weapon pickup |
 | `scripts/fx/blood_decal.gd` | `Decal` | Auto-frees blood decals after 30s |
 
+### Shaders
+
+| Shader | Effect |
+|---|---|
+| `shaders/goblin_rim.gdshader` | Rim base orange; red energy veins in rage; gold sparkles for leader |
+| `shaders/sword_glow.gdshader` | Blue-white fresnel rim + emission pulse during attack |
+| `shaders/post_process.gdshader` | Chromatic aberration, sharpening, vignette, film grain, hit flash |
+| `shaders/floor_wet.gdshader` | Procedural puddles (dual-freq Voronoi), blood stains, wet specular |
+| `shaders/ghost_player.gdshader` | Rim fresnel + animated UV drift for remote player ghost bodies |
+
 ### Groups
-- `"player"` — set in `player_controller.gd._ready()`
-- `"enemies"` — set in `enemy_controller.gd._ready()`
-- `"hud"` — must be set on the HUD node; used by `enemy_controller._die()` to call `register_kill()`
+
+| Group | Used by |
+|---|---|
+| `"player"` | `enemy_controller` to locate nearest player target |
+| `"enemies"` | Sword hitbox, spawner (alive count), AI caches |
+| `"hud"` | `enemy_controller._die()` calls `register_kill()` |
+| `"spawner"` | NetworkManager / HUD to locate spawner node |
+| `"block_spawn"` | Props that block enemy spawns within 3.5m |
 
 ### Combat flow
-1. Mouse flick detected (accumulated movement > `attack_threshold` px in 80ms window) → `_trigger_attack()` determines swing type (horizontal/vertical/diagonal) from flick direction
+1. Mouse flick/click detected → `_trigger_attack()` determines swing type from direction
 2. Tween animates `SwordMesh`, `SwordHitbox` (Area3D) enabled during swing
-3. `SwordHitbox.body_entered` → `body.take_hit(direction * knockback_force)` on enemies in `"enemies"` group
-4. `enemy_controller.take_hit()` decrements health, applies knockback velocity, sets `is_knocked` briefly; at 0 health → `_die()`
-5. `_die()` disables collision, tweens scale to zero, then calls `hud.register_kill()` via `"hud"` group, then `queue_free()`
+3. `SwordHitbox.body_entered` → `body.take_hit(direction * knockback_force)`
+4. In multiplayer: client sends `rpc_id(1, "rpc_take_hit", ...)` to server for validation; server calls `take_hit` and routes damage back to owning peer via `rpc_take_damage`
+5. `enemy_controller.take_hit()` decrements HP, applies knockback; at 0 HP → `_die()`
+6. `_die()` disables collision, tweens scale to zero, notifies HUD via `"hud"` group, `queue_free()`
 
-RMB hold → block stance (weapon raised, hitbox disabled during `is_blocking`)
+### Multiplayer architecture
+
+**Listen server** — host plays and serves simultaneously. Single player is unchanged because `multiplayer.is_server()` and `is_multiplayer_authority()` both return true with no peer set.
+
+Key patterns:
+- All MP-specific code guarded by `NetworkManager.is_multiplayer_session`
+- `set_multiplayer_authority(peer_id)` determines which peer owns each player node
+- Enemy AI runs **server-only**; clients receive position/health via `_net_receive_enemy_state` RPC at ~15Hz
+- Player position synced at 20Hz via `unreliable_ordered` RPC
+- Enemy names `Enemy_N` are consistent across all peers for RPC routing
+- Remote players rendered as ghost bodies: volumetric mist particles (3 layered emitters) + real weapon model with `ghost_player.gdshader`; particle color reflects health ratio (cyan → yellow → red)
+
+**NetworkManager constants:**
+- `PORT = 7777`
+- `MAX_CLIENTS = 3` (host + 3 = 4 players total)
+
+### GameManager (AutoLoad)
+
+Persists between scenes:
+- `kills`, `wave`, `coins` — run stats passed to defeat/victory screens
 
 ### Assets (`assets/`)
-- `models/goblin.fbx` + `Goblins 2.fbx` — goblin enemy models (import scale may need `0.01`)
-- `models/Sword_01.fbx` — primary weapon; other weapons available (Ax, Dagger, Hammer, etc.)
-- `models/Arena.blend` — arena environment (**requires Blender installed** for Godot's importer)
-- `textures/Goblin.Texture.png` — goblin albedo texture
-- `textures/blood/blood1-7.png` — blood decal textures (converted from TIF)
+- `models/goblin.fbx` + `Goblins 2.fbx` — goblin models (import scale `0.01`)
+- `models/Sword_01.fbx` — primary weapon; Ax, Dagger, Hammer, etc. available
+- `models/Arena.blend` — arena environment (**requires Blender** for Godot importer)
+- `textures/Goblin.Texture.png` — goblin albedo
+- `textures/blood/blood1-7.png` — blood decal textures
 
 ### Arena.blend import note
-Godot imports `.blend` by invoking Blender. Set the Blender path in `Editor > Editor Settings > FileSystem > Import > Blender > Blender Path`. After import, enable collision on the floor mesh or add a `StaticBody3D` with `BoxShape3D` manually.
+Set Blender path in `Editor > Editor Settings > FileSystem > Import > Blender > Blender Path`. After import, enable collision on floor mesh or add `StaticBody3D` + `BoxShape3D` manually.
 
 ### FBX scale
-Goblin and weapon FBX files likely need scale set to `0.01` in the Import dock after first import.
+Goblin and weapon FBX files need scale `0.01` in the Import dock after first import.

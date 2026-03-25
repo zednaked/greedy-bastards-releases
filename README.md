@@ -1,6 +1,6 @@
 # Greedy Bastards
 
-Arena melee FPS em Godot 4. Lute contra hordas infinitas de goblins com uma espada. Cada wave traz inimigos mais rápidos, mais duros e com novos comportamentos. Sobreviva o máximo que conseguir.
+Arena melee FPS em Godot 4. Lute contra hordas infinitas de goblins com uma espada. Jogue sozinho ou com até 3 amigos em co-op. Cada wave traz inimigos mais rápidos, mais duros e com novos comportamentos. Sobreviva o máximo que conseguir.
 
 ---
 
@@ -10,14 +10,15 @@ Arena melee FPS em Godot 4. Lute contra hordas infinitas de goblins com uma espa
 |---|---|
 | Mover | WASD |
 | Pular | Espaço |
-| **Atacar** | Mover o mouse rápido (flick) |
+| **Atacar (flick)** | Mover o mouse rápido |
+| **Atacar (click)** | LMB — combo de até 3 hits |
 | **Bloquear / Aparar** | Segurar RMB |
 | **Dash** | Duplo toque em qualquer direção |
 | Arremessar espada | RMB enquanto empunha |
 | Pegar item / Abrir baú | E |
 | Pausar | Esc |
 
-> O ataque é detectado pela velocidade do movimento do mouse — quanto mais rápido o flick, mais forte o golpe. A direção do flick determina o tipo de swing (horizontal, vertical, diagonal).
+> **Flick:** mova o mouse com velocidade para atacar — a direção determina o tipo de swing (horizontal, vertical, diagonal). **Click:** LMB executa ataques rápidos encadeáveis em combo de até 3 hits.
 
 ---
 
@@ -32,6 +33,14 @@ Arena melee FPS em Godot 4. Lute contra hordas infinitas de goblins com uma espa
 - **Lunge:** o ataque empurra o jogador para frente (5.0 força base)
 - **Combo:** hits consecutivos aumentam o contador; 2+ combo + kill ativa o Vampirismo (se desbloqueado)
 - **Arremessar espada:** jogador fica desarmado (dano dobrado recebido) até recuperar a arma
+
+### Co-op Multiplayer
+
+- Até **4 jogadores** via rede local ou internet (porta 7777)
+- No menu inicial: **Hospedar Jogo** ou **Entrar** (digitar IP)
+- O host inicia a partida quando todos estiverem prontos
+- Inimigos miram no jogador mais próximo
+- Jogadores remotos aparecem como **névoa etérea** com a espada real — a cor da névoa reflete a vida do jogador (azul = cheio, amarelo = meio, vermelho = crítico)
 
 ### Waves
 
@@ -108,18 +117,19 @@ Root
 
 | Script | Tipo | Responsabilidade |
 |---|---|---|
-| `scripts/player/player_controller.gd` | `CharacterBody3D` | Movimento, dash, HP, invencibilidade, upgrades |
-| `scripts/player/sword_attack.gd` | `Node3D` (WeaponPivot) | Flick/click attack, hitbox, block/parry, lunge, weapon throw |
-| `scripts/enemies/enemy_controller.gd` | `CharacterBody3D` | IA completa, 26+ subsistemas, animação procedural, falas |
-| `scripts/enemies/enemy_spawner.gd` | `Node3D` | Wave state machine, spawn, scaling, chest/upgrade flow |
+| `scripts/player/player_controller.gd` | `CharacterBody3D` | Movimento, dash, HP, upgrades, sync multiplayer, ghost body |
+| `scripts/player/sword_attack.gd` | `Node3D` (WeaponPivot) | Flick/click attack, hitbox, block/parry, lunge, weapon throw; desativado em peers remotos |
+| `scripts/enemies/enemy_controller.gd` | `CharacterBody3D` | IA completa, 26+ subsistemas, animação procedural, puppet mode em clientes |
+| `scripts/enemies/enemy_spawner.gd` | `Node3D` | Wave state machine, spawn, scaling, chest/upgrade flow; server-authoritative |
 | `scripts/enemies/projectile.gd` | `Area3D` | Projétil arcing do ranged goblin |
 | `scripts/enemies/bomb.gd` | `RigidBody3D` | Bomba com fusível, explosão em raio, FX |
 | `scripts/hud.gd` | `CanvasLayer` | HP pips, kill counter, combo, wave announce, vignettes |
+| `scripts/ui/title_overlay.gd` | `CanvasLayer` | Título + lobby multiplayer (hospedar/entrar/iniciar) |
 | `scripts/ui/upgrade_panel.gd` | `Control` | Cards de upgrade com categoria/cor/ícone, animação escalonada |
 | `scripts/ui/defeat_screen.gd` | `Control` | Tela de derrota com stats e entrada dramática sequencial |
 | `scripts/ui/pause_screen.gd` | `Control` | Pause com slide animation |
-| `scripts/ui/title_overlay.gd` | `CanvasLayer` | Título com pulso e botões estilizados |
 | `scripts/fx/screen_fx.gd` | `CanvasLayer` | Vinhetas, flashes, chromatic aberration, trauma |
+| `scripts/network_manager.gd` | **AutoLoad** | ENet host/join, spawn de jogadores via RPC, lifecycle de peers |
 | `scripts/arena_walls.gd` | `Node3D` | Boundary da arena, reposiciona inimigos que saem |
 
 ### Shaders
@@ -130,31 +140,32 @@ Root
 | `shaders/sword_glow.gdshader` | Rim azul-branco fresnel + pulso de emissão durante ataque |
 | `shaders/post_process.gdshader` | Chromatic aberration, sharpening, vignette, film grain, hit flash |
 | `shaders/floor_wet.gdshader` | Poças procedurais (Voronoi dual-freq), manchas de sangue, especular molhado |
+| `shaders/ghost_player.gdshader` | Rim fresnel + drift animado de névoa para jogadores remotos |
 
 ### Grupos
 
 | Grupo | Usado por |
 |---|---|
-| `"player"` | `enemy_controller` para localizar o jogador |
+| `"player"` | `enemy_controller` para localizar o alvo mais próximo |
 | `"enemies"` | Hitbox de espada, spawner (contagem de vivos), cache de IA |
 | `"hud"` | `enemy_controller._die()` chama `register_kill()` |
+| `"spawner"` | NetworkManager / HUD para localizar o spawner |
 | `"block_spawn"` | Props que bloqueiam spawn de inimigos dentro de 3.5m |
 
-### Fluxo de combate
+### Multiplayer
 
-1. Flick/click detectado → `_trigger_attack()` determina tipo de swing pela direção
-2. Tween anima `SwordMesh`, `SwordHitbox` (Area3D) ativo durante o swing
-3. `SwordHitbox.body_entered` → `body.take_hit(direction * knockback_force)`
-4. `enemy_controller.take_hit()` decrementa HP, aplica knockback, estado `is_knocked`
-5. Timer de knockback (0.45s) expira **ou** inimigo pousa → `is_recovering` (decelera)
-6. HP ≤ 0 → `_die()`: desativa colisão, tween de scale → zero, notifica HUD, `queue_free()`
+**Listen server** — host joga e serve simultaneamente. Single player inalterado (`is_multiplayer_authority()` retorna true para todos os nós sem peer configurado).
+
+- Lógica de inimigos roda **exclusivamente no servidor**; clientes recebem posição via RPC a ~15Hz
+- Posição do jogador sincronizada a 20Hz via `unreliable_ordered`
+- Jogadores remotos renderizados como névoa etérea: 3 emissores de partículas volumétricas + modelo real da arma com `ghost_player.gdshader`
+- Cor da névoa reflete vida em tempo real (cyan → amarelo → vermelho)
+- `MAX_CLIENTS = 3` → 4 jogadores total, porta 7777
 
 ### GameManager (AutoLoad)
 
 Singleton que persiste entre cenas:
-- `kills` — total de kills da run
-- `wave` — wave atingida
-- `coins` — moedas acumuladas
+- `kills`, `wave`, `coins` — stats da run passados para tela de derrota
 
 ---
 
@@ -162,15 +173,7 @@ Singleton que persiste entre cenas:
 
 Requer **Godot 4.3+** com templates de exportação instalados.
 
-```bash
-# Exportar Linux
-godot --headless --export-release "Linux/X11" build/linux/GreedyBastards.x86_64
-
-# Exportar Windows
-godot --headless --export-release "Windows Desktop" build/windows/GreedyBastards.exe
-```
-
-Binários disponíveis em [greedy-bastards-releases](https://github.com/zednaked/greedy-bastards-releases/releases).
+Exportar via **Project → Export** no editor Godot. Binários disponíveis em [greedy-bastards-releases](https://github.com/zednaked/greedy-bastards-releases/releases).
 
 ---
 
