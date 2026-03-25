@@ -55,13 +55,18 @@ floor_snap_length = 0.35
 bob_freq = 1.92
 bob_roll = 0.075
 forward_lean = 0.045
-max_health = 15
 invincibility_time = 1.16
 dash_duration = 0.235
 
 [node name="EnemySpawner" type="Node3D" parent="." unique_id=1217919587]
 script = ExtResource("4")
 goblin_scene = ExtResource("3")
+spawn_radius = 30.365
+goblins_wave_1 = 1
+goblins_per_wave_increase = 1
+ranged_unlock_wave = 2
+bomber_unlock_wave = 2
+trapper_unlock_wave = 2
 
 [node name="Weapons" type="Node3D" parent="." unique_id=55667788]
 

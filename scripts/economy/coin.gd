@@ -7,6 +7,7 @@ var _lifetime: float = 25.0
 
 func _ready() -> void:
 	add_to_group("coins")
+	angular_velocity = Vector3(0.0, 2.8, 0.0)
 	# Collect area
 	_collect_area = Area3D.new()
 	var col := CollisionShape3D.new()
@@ -16,12 +17,7 @@ func _ready() -> void:
 	_collect_area.add_child(col)
 	add_child(_collect_area)
 	_collect_area.body_entered.connect(_on_body_entered)
-	# Auto-free após lifetime — conexão direta ao método (Godot desconecta automaticamente se freed antes)
 	get_tree().create_timer(_lifetime).timeout.connect(queue_free)
-
-func _process(delta: float) -> void:
-	# Slow rotation for visual flair
-	rotate_y(delta * 2.8)
 
 func _on_body_entered(body: Node) -> void:
 	if _collected:
@@ -35,8 +31,9 @@ func _on_body_entered(body: Node) -> void:
 		body.add_coins(value)
 	# Pop tween before freeing
 	var t := create_tween()
+	freeze = true
 	t.tween_property(self, "scale", Vector3(1.6, 1.6, 1.6), 0.06)
-	t.tween_property(self, "scale", Vector3.ZERO, 0.08)
+	t.tween_property(self, "scale", Vector3(0.001, 0.001, 0.001), 0.08)
 	t.tween_callback(queue_free)
 
 func set_collect_radius(r: float) -> void:

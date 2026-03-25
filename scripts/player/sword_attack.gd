@@ -99,6 +99,9 @@ func _ready() -> void:
 	spring_pos = REST_POS
 	player = get_parent().get_parent()
 	_setup_sword_glow()
+	if not player.is_multiplayer_authority():
+		set_process_unhandled_input(false)
+		set_process(false)
 
 func _setup_sword_glow() -> void:
 	var shader := load("res://shaders/sword_glow.gdshader") as Shader
@@ -205,8 +208,9 @@ func _process(delta: float) -> void:
 				sdir = _thrown.linear_velocity.normalized()
 			else:
 				sdir = Vector3.ZERO
-			if sdir.length_squared() > 0.01:
-				_spawn_sword_streaks(_thrown.global_position, sdir)
+			var spos := _thrown.global_position
+			if sdir.length_squared() > 0.01 and spos.is_finite():
+				_spawn_sword_streaks(spos, sdir)
 
 	# Prompt de pickup e auto-pickup por proximidade
 	if _thrown != null and is_instance_valid(_thrown) and not _is_recalling:
@@ -314,7 +318,7 @@ func _on_thrown_hit(body: Node) -> void:
 	_thrown.linear_velocity  = Vector3.ZERO
 	_thrown.angular_velocity = Vector3.ZERO
 
-	_spawn_throw_impact(impact_pos, impact_dir)
+	_spawn_throw_impact(impact_pos)
 
 func _recall_sword() -> void:
 	if _thrown == null or not is_instance_valid(_thrown):
@@ -365,7 +369,7 @@ func _detonate_sword() -> void:
 		_is_recalling = false
 		has_weapon = true
 		weapon_mesh.visible = true
-		weapon_mesh.scale = Vector3.ZERO
+		weapon_mesh.scale = Vector3(0.01, 0.01, 0.01)
 		spring_pos = REST_POS
 		spring_vel = Vector3.ZERO
 		var pop := create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
@@ -481,7 +485,7 @@ func _spawn_detonation_fx(pos: Vector3) -> void:
 	if hud and hud.has_method("flash_explosion"):
 		hud.flash_explosion(0.7)
 
-func _spawn_throw_impact(pos: Vector3, dir: Vector3) -> void:
+func _spawn_throw_impact(pos: Vector3) -> void:
 	var scene := get_tree().current_scene
 
 	# ── 1. Burst de faíscas omnidirecional ────────────────────────────────────
@@ -574,8 +578,10 @@ func _spawn_sword_streaks(pos: Vector3, dir: Vector3) -> void:
 		scene.add_child(streak)
 		var offset := perp * randf_range(-0.07, 0.07) + Vector3.UP * randf_range(-0.07, 0.07)
 		streak.global_position = pos + offset
-		var up := Vector3.RIGHT if abs(dir.dot(Vector3.UP)) > 0.9 else Vector3.UP
-		streak.look_at(streak.global_position + dir, up)
+		var target_pos := streak.global_position + dir
+		if target_pos.is_finite() and not streak.global_position.is_equal_approx(target_pos):
+			var up := Vector3.RIGHT if abs(dir.dot(Vector3.UP)) > 0.9 else Vector3.UP
+			streak.look_at(target_pos, up)
 		var fly_dist := randf_range(0.35, 1.0)
 		var fly_dur  := randf_range(0.07, 0.15)
 		var t := streak.create_tween().set_parallel(true)
@@ -880,7 +886,12 @@ func _on_hit(body: Node3D) -> void:
 	elif "is_in_strike" in body and body.is_in_strike:
 		kb *= 1.6
 
-	body.take_hit(direction * kb)
+	# Em multiplayer: cliente envia RPC para servidor validar e processar o hit
+	# Em single player: chama diretamente (servidor local)
+	if NetworkManager.is_multiplayer_session and not multiplayer.is_server():
+		body.rpc_id(1, "rpc_take_hit", direction * kb, multiplayer.get_unique_id())
+	else:
+		body.take_hit(direction * kb)
 
 	var impact_pos := body.global_position + Vector3(0.0, 0.8, 0.0)
 

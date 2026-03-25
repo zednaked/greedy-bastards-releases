@@ -47,6 +47,17 @@ static func reset_token_pool() -> void:
 	Engine.time_scale = 1.0
 
 # Sistema S + X: notificações estáticas (chamadas por instâncias, afetam todas)
+func _find_nearest_player() -> Node3D:
+	var nearest: Node3D = null
+	var min_dist := INF
+	for p in get_tree().get_nodes_in_group("player"):
+		if not is_instance_valid(p): continue
+		var d := global_position.distance_squared_to(p.global_position)
+		if d < min_dist:
+			min_dist = d
+			nearest = p
+	return nearest
+
 static func on_ally_death(origin: Vector3) -> void:
 	for e in _enemy_cache:
 		if not is_instance_valid(e): continue
@@ -252,6 +263,13 @@ var health: int
 var player: Node3D
 var is_knocked := false
 var is_dead := false
+
+# ─── Multiplayer ──────────────────────────────────────────────────────────────
+var _last_hit_by: int = 0          # peer ID do último atacante
+var _net_sync_timer: float = 0.0
+var _net_target_pos: Vector3 = Vector3.ZERO
+var _net_target_rot_y: float = 0.0
+var _net_pos_ready: bool = false    # recebeu ao menos uma atualização
 var is_attacking := false
 var is_in_windup := false
 var is_in_strike := false
@@ -275,7 +293,15 @@ const ARENA_RADIUS: float = 20.0  # margem interna do raio da arena (wall_radius
 func _ready() -> void:
 	add_to_group("enemies")
 	health = max_health
-	player = get_tree().get_first_node_in_group("player")
+
+	# Modo puppet: cliente recebe posição via RPC, sem IA, sem colisão
+	if get_meta("is_net_puppet", false):
+		_net_target_pos = global_position
+		set_collision_layer_value(1, false)
+		set_collision_mask_value(1, false)
+		return  # physics_process continua ativo para interpolação de posição
+
+	player = _find_nearest_player()
 	_circle_dir = 1.0 if randf() > 0.5 else -1.0
 	_taunt_cooldown = randf_range(4.0, 12.0)
 	_throw_cooldown = randf_range(0.5, 2.5)
@@ -330,6 +356,67 @@ func _ready() -> void:
 
 # ─── Sistema F — Wave Escalation ─────────────────────────────────────────────
 
+# ─── RPCs de Multiplayer ──────────────────────────────────────────────────────
+
+# Servidor → clientes: atualiza posição/estado do inimigo puppet
+@rpc("authority", "unreliable_ordered")
+func _net_receive_enemy_state(pos: Vector3, rot_y: float, hp: int, dead: bool) -> void:
+	if not get_meta("is_net_puppet", false):
+		return
+	_net_target_pos = pos
+	_net_target_rot_y = rot_y
+	_net_pos_ready = true
+	health = hp
+	if dead and not is_dead:
+		_die_puppet()
+
+# Cliente → servidor: hit com espada
+@rpc("any_peer", "reliable")
+func rpc_take_hit(knockback: Vector3, attacker_peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	# Validação básica: atacante deve existir e estar num range plausível
+	var attacker: Node3D = null
+	for p in get_tree().get_nodes_in_group("player"):
+		if is_instance_valid(p) and p.get_multiplayer_authority() == attacker_peer_id:
+			attacker = p
+			break
+	if attacker != null and attacker.global_position.distance_to(global_position) > 6.0:
+		return  # hit impossível, descarta
+	_last_hit_by = attacker_peer_id
+	take_hit(knockback)
+
+# Servidor → clientes: aplica slowmo de morte
+@rpc("authority", "call_remote", "reliable")
+func _net_apply_slowmo() -> void:
+	_slowmo_count += 1
+	Engine.time_scale = 0.15
+	await get_tree().create_timer(0.18, true, false, true).timeout
+	_slowmo_count = maxi(0, _slowmo_count - 1)
+	if _slowmo_count == 0:
+		Engine.time_scale = 1.0
+
+# Servidor → todos: registra kill no HUD de cada peer
+@rpc("authority", "call_local", "reliable")
+func _net_register_kill() -> void:
+	var hud = get_tree().get_first_node_in_group("hud")
+	if hud and hud.has_method("register_kill"):
+		hud.register_kill()
+
+# Morte visual apenas no cliente (sem lógica de jogo)
+func _die_puppet() -> void:
+	if is_dead:
+		return
+	is_dead = true
+	remove_from_group("enemies")
+	set_physics_process(false)
+	set_collision_layer_value(1, false)
+	set_collision_mask_value(1, false)
+	var visual := goblin_mesh if goblin_mesh != null else self
+	var tween := create_tween()
+	tween.tween_property(visual, "scale", Vector3(0.001, 0.001, 0.001), 0.25)
+	tween.tween_callback(queue_free)
+
 func emerge_from_cage() -> void:
 	if goblin_mesh == null:
 		return
@@ -342,29 +429,32 @@ func emerge_from_cage() -> void:
 	# Grito ao sair da jaula
 	tw.tween_callback(func(): _speak_ctx("rage"))
 
-func apply_wave_scaling(wave: int) -> void:
-	var w := mini(wave, 15)
+func apply_wave_scaling(wave: int, cfg: Dictionary = {}) -> void:
+	var scale_cap: int       = cfg.get("scale_cap", 15)
+	var spd_per_wave: float  = cfg.get("speed_per_wave", 0.07)
+	var cd_reduction: float  = cfg.get("attack_cd_reduction", 0.04)
+	var cd_min: float        = cfg.get("attack_cd_min", 0.90)
+	var hp4_wave: int        = cfg.get("hp4_wave", 8)
+	var hp5_wave: int        = cfg.get("hp5_wave", 12)
+	var dmg2_wave: int       = cfg.get("damage2_wave", 9)
+	var extra_att_wave: int  = cfg.get("extra_attacker_wave", 4)
+
+	var w := mini(wave, scale_cap)
 	_wave_num = wave
 
-	# Velocidade — +0.07/wave, crescimento bem suave
-	speed += 0.07 * (w - 1)
+	speed += spd_per_wave * (w - 1)
+	attack_cooldown_time = maxf(cd_min, attack_cooldown_time - cd_reduction * (w - 1))
 
-	# Cooldown de ataque — floor em 0.90s, redução lenta
-	attack_cooldown_time = maxf(0.90, attack_cooldown_time - 0.04 * (w - 1))
-
-	# HP: spike tardio — wave 8 = 4 HP, wave 12 = 5 HP
-	if wave >= 12:
+	if wave >= hp5_wave:
 		max_health = 5
-	elif wave >= 8:
+	elif wave >= hp4_wave:
 		max_health = 4
 	health = max_health
 
-	# Dano: só aumenta bem tarde — wave 9 = 2, nunca 3
-	if wave >= 9:
+	if wave >= dmg2_wave:
 		attack_damage = 2
 
-	# Atacantes simultâneos — máximo 3 sempre
-	if wave >= 4:
+	if wave >= extra_att_wave:
 		MAX_ACTIVE_ATTACKERS = 3
 
 # ─── Esqueleto ────────────────────────────────────────────────────────────────
@@ -405,13 +495,13 @@ func _setup_rim_shader() -> void:
 			else:
 				mesh_inst.set_surface_override_material(s, _rim_mat)
 
-func _sb(name: String, q: Quaternion) -> void:
-	var idx: int = _bones.get(name, -1)
+func _sb(bone_name: String, q: Quaternion) -> void:
+	var idx: int = _bones.get(bone_name, -1)
 	if idx >= 0:
 		_skeleton.set_bone_pose_rotation(idx, q)
 
-func _slerp_bone(name: String, target: Quaternion, t: float) -> void:
-	var idx: int = _bones.get(name, -1)
+func _slerp_bone(bone_name: String, target: Quaternion, t: float) -> void:
+	var idx: int = _bones.get(bone_name, -1)
 	if idx < 0:
 		return
 	var cur := _skeleton.get_bone_pose_rotation(idx)
@@ -420,6 +510,28 @@ func _slerp_bone(name: String, target: Quaternion, t: float) -> void:
 # ─── Física ───────────────────────────────────────────────────────────────────
 
 func _physics_process(delta: float) -> void:
+	# Modo puppet: apenas interpola posição recebida via RPC
+	if get_meta("is_net_puppet", false):
+		if _net_pos_ready:
+			global_position = global_position.lerp(_net_target_pos, delta * 12.0)
+			rotation.y = lerp_angle(rotation.y, _net_target_rot_y, delta * 12.0)
+		return
+
+	# Em multiplayer, IA roda apenas no servidor
+	if NetworkManager.is_multiplayer_session and not multiplayer.is_server():
+		return
+
+	# Atualiza alvo mais próximo periodicamente (multi-player CO-OP)
+	if NetworkManager.is_multiplayer_session:
+		_net_sync_timer -= delta
+		if _net_sync_timer <= 0.0:
+			_net_sync_timer = 0.066  # ~15 Hz — sync posição para clientes
+			rpc("_net_receive_enemy_state", global_position, rotation.y, health, is_dead)
+			# Retarget: verifica se há jogador mais próximo
+			var nearest := _find_nearest_player()
+			if nearest != null:
+				player = nearest
+
 	# Safety net: NaN velocity (de knockback com vetor zero normalizado) congela o enemy
 	if not velocity.is_finite():
 		velocity = Vector3.ZERO
@@ -671,10 +783,10 @@ func _physics_process(delta: float) -> void:
 		elif distance <= 18.0:
 			_move_circling(delta)
 		else:
-			var dir: Vector3 = (player.global_position - global_position).normalized()
-			dir.y = 0.0
-			velocity.x = dir.x * speed
-			velocity.z = dir.z * speed
+			var gdir: Vector3 = (player.global_position - global_position).normalized()
+			gdir.y = 0.0
+			velocity.x = gdir.x * speed
+			velocity.z = gdir.z * speed
 			_animate_run(delta)
 		_sep_frame = (_sep_frame + 1) % 3
 		if _sep_frame == 0:
@@ -712,32 +824,25 @@ func _physics_process(delta: float) -> void:
 				is_retreating = true
 				_retreat_timer = randf_range(2.0, 3.5)
 			# (o bloco is_retreating no topo cuidará do movimento)
-		elif distance > 11.0:
-			# Longe demais — aproxima lentamente em direção ao player
-			var dir: Vector3 = (player.global_position - global_position).normalized()
-			dir.y = 0.0
-			velocity.x = dir.x * speed * 0.55
-			velocity.z = dir.z * speed * 0.55
-			_animate_run(delta)
-		elif _trap_cooldown <= 0.0:
-			# No range ideal — coloca armadilha
-			_start_place_trap()
-			# Deriva lateralmente enquanto coloca
-			var dir: Vector3 = (player.global_position - global_position).normalized()
-			dir.y = 0.0
-			var tangent := Vector3(_circle_dir * dir.z, 0.0, -_circle_dir * dir.x).normalized()
-			velocity.x = tangent.x * speed * 0.3
-			velocity.z = tangent.z * speed * 0.3
-			_animate_run(delta)
 		else:
-			# Orbita ao redor do player mantendo range 5-10m
-			var dir: Vector3 = (player.global_position - global_position).normalized()
-			dir.y = 0.0
-			var tangent := Vector3(_circle_dir * dir.z, 0.0, -_circle_dir * dir.x).normalized()
-			# Leve pull inward pra não se afastar demais
-			var move_dir := (tangent * 0.75 + dir * 0.25).normalized()
-			velocity.x = move_dir.x * speed * 0.5
-			velocity.z = move_dir.z * speed * 0.5
+			var tdir: Vector3 = (player.global_position - global_position).normalized()
+			tdir.y = 0.0
+			if distance > 11.0:
+				# Longe demais — aproxima lentamente em direção ao player
+				velocity.x = tdir.x * speed * 0.55
+				velocity.z = tdir.z * speed * 0.55
+			elif _trap_cooldown <= 0.0:
+				# No range ideal — coloca armadilha
+				_start_place_trap()
+				var tangent := Vector3(_circle_dir * tdir.z, 0.0, -_circle_dir * tdir.x).normalized()
+				velocity.x = tangent.x * speed * 0.3
+				velocity.z = tangent.z * speed * 0.3
+			else:
+				# Orbita ao redor do player mantendo range 5-10m
+				var tangent := Vector3(_circle_dir * tdir.z, 0.0, -_circle_dir * tdir.x).normalized()
+				var move_dir := (tangent * 0.75 + tdir * 0.25).normalized()
+				velocity.x = move_dir.x * speed * 0.5
+				velocity.z = move_dir.z * speed * 0.5
 			_animate_run(delta)
 		_sep_frame = (_sep_frame + 1) % 3
 		if _sep_frame == 0:
@@ -804,7 +909,6 @@ func _physics_process(delta: float) -> void:
 		var in_blind_spot: bool = to_goblin.length_squared() > 0.01 and \
 				player.global_transform.basis.z.dot(to_goblin.normalized()) > 0.45
 		var blind_spot_mult: float = 1.4 if in_blind_spot else 1.0
-		var blind_spot_range: float = 0.5 if in_blind_spot else 0.0
 
 		# Sistema L: taunt only if not in blind spot (don't reveal position)
 		if distance > 9.0 and _taunt_cooldown <= 0.0 and health == max_health and not in_blind_spot and randf() < delta * 0.4:
@@ -841,7 +945,10 @@ func _physics_process(delta: float) -> void:
 			var lateral := Vector3(global_transform.basis.x.x, 0.5, global_transform.basis.x.z).normalized()
 			if randf() > 0.5: lateral = -lateral
 			if player.has_method("take_damage"):
-				player.take_damage(0, lateral * 5.0)
+				if NetworkManager.is_multiplayer_session:
+					player.rpc_id(player.get_multiplayer_authority(), "rpc_take_damage", 0, lateral * 5.0)
+				else:
+					player.take_damage(0, lateral * 5.0)
 
 		# Sistema AB: war howl trigger when standing near player
 		if _howl_global_cooldown <= 0.0 and health == max_health and distance < 8.0 and not is_ranged and randf() < delta * 0.02:
@@ -1037,7 +1144,10 @@ func _on_jump_land() -> void:
 	if d < 2.2:
 		var dir := (player.global_position - global_position).normalized()
 		dir.y = 0.0
-		player.take_damage(attack_damage, dir * attack_knockback * 1.5 + Vector3(0, 3.5, 0))
+		if NetworkManager.is_multiplayer_session:
+			player.rpc_id(player.get_multiplayer_authority(), "rpc_take_damage", attack_damage, dir * attack_knockback * 1.5 + Vector3(0, 3.5, 0))
+		else:
+			player.take_damage(attack_damage, dir * attack_knockback * 1.5 + Vector3(0, 3.5, 0))
 		_spawn_blood_decal(0.5, 1.0)
 
 # ─── Sistema Z — Guard Stance ─────────────────────────────────────────────────
@@ -1529,7 +1639,10 @@ func _do_attack_hit_with_force(kb: float) -> void:
 		velocity = dir * attack_lunge
 		velocity.y = 1.5
 		if player.has_method("take_damage"):
-			player.take_damage(attack_damage, dir * kb)
+			if NetworkManager.is_multiplayer_session:
+				player.rpc_id(player.get_multiplayer_authority(), "rpc_take_damage", attack_damage, dir * kb)
+			else:
+				player.take_damage(attack_damage, dir * kb)
 
 # ─── Dano / Morte ─────────────────────────────────────────────────────────────
 
@@ -1758,6 +1871,9 @@ func _die() -> void:
 		if is_instance_valid(self): queue_free()
 	, CONNECT_ONE_SHOT)
 
+	# Slowmo: em multiplayer sincroniza para todos os clientes
+	if NetworkManager.is_multiplayer_session:
+		rpc("_net_apply_slowmo")
 	_slowmo_count += 1
 	Engine.time_scale = 0.15
 	await get_tree().create_timer(0.18, true, false, true).timeout
@@ -1766,19 +1882,31 @@ func _die() -> void:
 		Engine.time_scale = 1.0
 	var tween := create_tween()
 	var visual := goblin_mesh if goblin_mesh != null else self
+	var min_scale := Vector3(0.001, 0.001, 0.001)
 	if death_roll >= 0.8:
 		tween.tween_property(self, "rotation:y", rotation.y + TAU * 1.5, 0.35)\
 			.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
-		tween.parallel().tween_property(visual, "scale", Vector3.ZERO, 0.35)
+		tween.parallel().tween_property(visual, "scale", min_scale, 0.35)
 	else:
-		tween.tween_property(visual, "scale", Vector3.ZERO, 0.25)
+		tween.tween_property(visual, "scale", min_scale, 0.25)
 	await tween.finished
 	if not is_instance_valid(self): return
-	if is_instance_valid(player) and player.has_method("add_combo_kill"):
+	# Combo kill: roteia para o peer que deu o último hit
+	if NetworkManager.is_multiplayer_session:
+		if _last_hit_by > 0:
+			for p in get_tree().get_nodes_in_group("player"):
+				if is_instance_valid(p) and p.get_multiplayer_authority() == _last_hit_by:
+					p.rpc_id(_last_hit_by, "rpc_add_combo_kill")
+					break
+	elif is_instance_valid(player) and player.has_method("add_combo_kill"):
 		player.add_combo_kill()
-	var hud = get_tree().get_first_node_in_group("hud")
-	if hud and hud.has_method("register_kill"):
-		hud.register_kill()
+	# Kill counter: em multiplayer notifica todos via RPC
+	if NetworkManager.is_multiplayer_session:
+		rpc("_net_register_kill")
+	else:
+		var hud = get_tree().get_first_node_in_group("hud")
+		if hud and hud.has_method("register_kill"):
+			hud.register_kill()
 	queue_free()
 
 func _drop_coins() -> void:
@@ -1793,7 +1921,7 @@ func _drop_coins() -> void:
 		base = 3
 	elif is_trapper or is_ranged:
 		base = 2
-	var coin_count: int = base + (_wave_num / 3)
+	var coin_count: int = base + int(_wave_num / 3.0)
 	for i in coin_count:
 		var coin := coin_scene.instantiate()
 		get_tree().current_scene.add_child(coin)

@@ -14,6 +14,11 @@ size = Vector3(0.30683377, 0.46428528, 0.20923309)
 [node name="Player" type="CharacterBody3D" unique_id=1864464396]
 script = ExtResource("1")
 default_weapon_scene = ExtResource("2_gmlin")
+max_health = 15
+coyote_time = 0.7
+jump_buffer_time = 0.4
+dash_duration = 0.07
+dash_cooldown_time = 1.0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=631052571]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
@@ -29,6 +34,11 @@ fov = 66.5
 [node name="WeaponPivot" type="Node3D" parent="Head" unique_id=507450414]
 transform = Transform3D(0.93800133, -0.065232635, -0.34043834, 0.1057087, 0.9891812, 0.101715945, 0.33012003, -0.131397, 0.934749, 0.35, -0.30000007, -0.6)
 script = ExtResource("2")
+knockback_force = 8.0
+attack_window = 0.045
+attack_cooldown_time = 0.035
+weapon_spring = 33.0
+weapon_damp = 1.0
 s1_pull_rot_x = 29.86
 s1_hit_z = -0.845
 s1_hit_rot_x = -85.795
@@ -41,6 +51,7 @@ s2_slam_y = 0.075
 s2_slam_rot_x = -73.095
 s2_t_raise = 0.28
 s2_t_slam = 0.23
+throw_damage_knockback = 1.5
 
 [node name="SwordMesh" type="Node3D" parent="Head/WeaponPivot" unique_id=814228862]
 
