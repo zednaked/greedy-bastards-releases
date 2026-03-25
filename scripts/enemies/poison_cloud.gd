@@ -7,8 +7,7 @@ extends Node3D
 
 var _timer: float = 0.0
 var _tick_timer: float = 0.0
-var _player_inside: bool = false
-var _player: Node = null
+var _players_inside: Array = []
 var _light: OmniLight3D = null
 var _particles: GPUParticles3D = null
 
@@ -28,25 +27,28 @@ func _setup_area() -> void:
 	area.add_child(col)
 	add_child(area)
 	area.body_entered.connect(func(b: Node3D):
-		if b.is_in_group("player"):
-			_player_inside = true
-			_player = b
-			_tick_timer = 1.0  # primeiro tick logo após entrar
+		if b.is_in_group("player") and not _players_inside.has(b):
+			_players_inside.append(b)
 	)
 	area.body_exited.connect(func(b: Node3D):
-		if b.is_in_group("player"):
-			_player_inside = false
+		_players_inside.erase(b)
 	)
 
 func _process(delta: float) -> void:
 	_timer -= delta
 
-	if _player_inside and is_instance_valid(_player):
+	if not _players_inside.is_empty():
 		_tick_timer -= delta
 		if _tick_timer <= 0.0:
 			_tick_timer = tick_interval
-			if _player.has_method("take_damage"):
-				_player.take_damage(tick_damage)
+			for p in _players_inside.duplicate():
+				if not is_instance_valid(p):
+					_players_inside.erase(p)
+					continue
+				if NetworkManager.is_multiplayer_session:
+					p.rpc_id(p.get_multiplayer_authority(), "rpc_take_damage", tick_damage, Vector3.ZERO)
+				else:
+					p.take_damage(tick_damage)
 			_flash_poison_screen()
 
 	# Começa a sumir nos últimos 2s

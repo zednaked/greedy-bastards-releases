@@ -49,24 +49,27 @@ func _explode() -> void:
 
 	# Dano antes do FX — hit stop do player vai pausar tudo brevemente
 	var origin := global_position
-	var player_node := get_tree().get_first_node_in_group("player")
-	if player_node:
+	for player_node in get_tree().get_nodes_in_group("player"):
 		var p3d := player_node as Node3D
-		if p3d and p3d.global_position.distance_to(origin) <= explosion_radius:
+		if p3d == null or not is_instance_valid(p3d): continue
+		var dist := p3d.global_position.distance_to(origin)
+		if dist <= explosion_radius:
 			var dir: Vector3 = (p3d.global_position - origin).normalized()
-			if p3d.has_method("take_damage"):
-				p3d.take_damage(damage, dir * 8.0 + Vector3(0, 4.0, 0))
-		# Screen trauma para qualquer distância < radius * 2
-		if p3d:
-			var dist := p3d.global_position.distance_to(origin)
-			var trauma_amt := clampf(1.0 - dist / (explosion_radius * 2.5), 0.0, 1.0)
-			if trauma_amt > 0.05 and p3d.has_method("add_trauma"):
+			var kb := dir * 8.0 + Vector3(0, 4.0, 0)
+			if NetworkManager.is_multiplayer_session:
+				p3d.rpc_id(p3d.get_multiplayer_authority(), "rpc_take_damage", damage, kb)
+			else:
+				p3d.take_damage(damage, kb)
+		# Screen trauma — só para o peer dono do player
+		var trauma_amt := clampf(1.0 - dist / (explosion_radius * 2.5), 0.0, 1.0)
+		if trauma_amt > 0.05 and p3d.has_method("add_trauma"):
+			if not NetworkManager.is_multiplayer_session or p3d.is_multiplayer_authority():
 				p3d.add_trauma(trauma_amt * 0.9)
-			# Flash de tela — laranja se dentro do raio
-			if dist <= explosion_radius * 1.5:
-				var hud := get_tree().get_first_node_in_group("hud")
-				if hud and hud.has_method("flash_explosion"):
-					hud.flash_explosion(clampf(1.0 - dist / (explosion_radius * 1.5), 0.15, 0.75))
+		# Flash de tela
+		if dist <= explosion_radius * 1.5:
+			var hud := get_tree().get_first_node_in_group("hud")
+			if hud and hud.has_method("flash_explosion"):
+				hud.flash_explosion(clampf(1.0 - dist / (explosion_radius * 1.5), 0.15, 0.75))
 
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		var e3d := enemy as Node3D

@@ -455,6 +455,20 @@ func rpc_take_damage(amount: int, knockback: Vector3) -> void:
 		return  # só o dono processa o próprio dano
 	take_damage(amount, knockback)
 
+# Chamado pelo servidor para adicionar moedas a um peer específico
+@rpc("any_peer", "reliable")
+func rpc_add_coins(amount: int) -> void:
+	if not is_multiplayer_authority():
+		return
+	add_coins(amount)
+
+# Chamado pelo servidor para curar um peer específico
+@rpc("any_peer", "reliable")
+func rpc_heal(amount: int) -> void:
+	if not is_multiplayer_authority():
+		return
+	heal(amount)
+
 # Chamado pelo servidor para combo kill em peer específico
 @rpc("any_peer", "reliable")
 func rpc_add_combo_kill() -> void:

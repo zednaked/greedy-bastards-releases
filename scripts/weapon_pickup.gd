@@ -11,7 +11,11 @@ var player: Node3D
 var is_picked_up := false
 
 func _ready() -> void:
-	player = get_tree().get_first_node_in_group("player")
+	# Em multiplayer pega o player local (authority); em single player pega o único
+	for p in get_tree().get_nodes_in_group("player"):
+		if p.is_multiplayer_authority():
+			player = p
+			break
 	if prompt_label:
 		prompt_label.text = "[ E ] Pegar %s" % weapon_name
 		prompt_label.visible = false

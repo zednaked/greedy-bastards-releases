@@ -24,11 +24,16 @@ func _on_body_entered(body: Node) -> void:
 		return
 	if not body.is_in_group("player"):
 		return
+	if NetworkManager.is_multiplayer_session and not multiplayer.is_server():
+		return
 	_collected = true
 	_collect_area.body_entered.disconnect(_on_body_entered)
 	_collect_area.set_deferred("monitoring", false)
 	if body.has_method("add_coins"):
-		body.add_coins(value)
+		if NetworkManager.is_multiplayer_session:
+			body.rpc_id(body.get_multiplayer_authority(), "rpc_add_coins", value)
+		else:
+			body.add_coins(value)
 	# Pop tween before freeing
 	var t := create_tween()
 	freeze = true

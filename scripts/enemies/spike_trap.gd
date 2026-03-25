@@ -37,8 +37,11 @@ func _on_body_entered(body: Node) -> void:
 			dir = Vector3.FORWARD
 		var push := dir.normalized() * push_force
 		push.y = 4.0
-		if body.has_method("take_damage"):
-			body.take_damage(damage, push)
+		if body.is_in_group("player"):
+			if NetworkManager.is_multiplayer_session:
+				body.rpc_id(body.get_multiplayer_authority(), "rpc_take_damage", damage, push)
+			else:
+				body.take_damage(damage, push)
 		elif body.has_method("take_hit"):
 			body.take_hit(push)
 	# Reveal briefly

@@ -31,6 +31,8 @@ func _on_body_exited(body: Node) -> void:
 	_bodies.erase(body)
 
 func _hit(body: Node) -> void:
+	if NetworkManager.is_multiplayer_session and not multiplayer.is_server():
+		return
 	var b3d := body as Node3D
 	if b3d == null:
 		return
@@ -40,4 +42,7 @@ func _hit(body: Node) -> void:
 		dir = Vector3.FORWARD
 	var push: Vector3 = dir.normalized() * push_force
 	push.y = 3.5
-	body.take_damage(damage, push)
+	if body.is_in_group("player") and NetworkManager.is_multiplayer_session:
+		body.rpc_id(body.get_multiplayer_authority(), "rpc_take_damage", damage, push)
+	else:
+		body.take_damage(damage, push)

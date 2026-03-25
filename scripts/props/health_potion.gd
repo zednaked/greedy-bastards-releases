@@ -13,8 +13,13 @@ func _ready() -> void:
 func _on_body_entered(body: Node) -> void:
 	if not _active or not body.is_in_group("player"):
 		return
+	if NetworkManager.is_multiplayer_session and not multiplayer.is_server():
+		return
 	if body.has_method("heal"):
-		body.heal(heal_amount)
+		if NetworkManager.is_multiplayer_session:
+			body.rpc_id(body.get_multiplayer_authority(), "rpc_heal", heal_amount)
+		else:
+			body.heal(heal_amount)
 		_pickup()
 
 func _pickup() -> void:
