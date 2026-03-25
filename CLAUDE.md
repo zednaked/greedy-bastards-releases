@@ -42,6 +42,13 @@ Open `project.godot` in Godot 4.3+. No CLI build commands — use the Godot Edit
 | `scripts/network_manager.gd` | **AutoLoad** | ENet host/join, player spawning via RPC, peer lifecycle; `is_multiplayer_session` flag guards all MP-specific code |
 | `scripts/arena_walls.gd` | `Node3D` | Arena boundary, repositions enemies that escape |
 | `scripts/weapon_pickup.gd` | `Node3D` | World weapon pickup |
+| `scripts/economy/chest.gd` | `Node3D` | Chest spawned between waves; opens on interact, triggers upgrade panel |
+| `scripts/economy/coin.gd` | `Area3D` | Coin dropped by enemies; auto-collects within player's `coin_collect_radius` |
+| `scripts/enemies/spike_trap.gd` | `Area3D` | Spike trap planted by trapper goblin; low alpha, damages player on contact |
+| `scripts/enemies/poison_bomb.gd` | `Node3D` | Poison bomb projectile (gas bomber variant); spawns `poison_cloud` on impact |
+| `scripts/enemies/poison_cloud.gd` | `Area3D` | Lingering poison cloud; applies damage over time to players inside |
+| `scripts/props/health_potion.gd` | `Node3D` | Health potion prop; restores 2 HP on pickup, respawns after 20s |
+| `scripts/props/ground_spike.gd` | `Area3D` | Static ground spike obstacle; damages and pushes player on contact |
 | `scripts/fx/blood_decal.gd` | `Decal` | Auto-frees blood decals after 30s |
 
 ### Shaders
@@ -63,6 +70,8 @@ Open `project.godot` in Godot 4.3+. No CLI build commands — use the Godot Edit
 | `"hud"` | `enemy_controller._die()` calls `register_kill()` |
 | `"spawner"` | NetworkManager / HUD to locate spawner node |
 | `"block_spawn"` | Props that block enemy spawns within 3.5m |
+| `"chest"` | `chest.gd` self-registers; used by player to detect interactable chests |
+| `"coins"` | `coin.gd` self-registers; used by player to auto-collect nearby coins |
 
 ### Combat flow
 1. Mouse flick/click detected → `_trigger_attack()` determines swing type from direction

@@ -123,6 +123,12 @@ Root
 | `scripts/enemies/enemy_spawner.gd` | `Node3D` | Wave state machine, spawn, scaling, chest/upgrade flow; server-authoritative |
 | `scripts/enemies/projectile.gd` | `Area3D` | Projétil arcing do ranged goblin |
 | `scripts/enemies/bomb.gd` | `RigidBody3D` | Bomba com fusível, explosão em raio, FX |
+| `scripts/enemies/spike_trap.gd` | `Area3D` | Armadilha de espinhos plantada pelo trapper; baixo alpha, dano no contato |
+| `scripts/enemies/poison_bomb.gd` | `Node3D` | Bomba de veneno do gas bomber; cria nuvem tóxica no impacto |
+| `scripts/enemies/poison_cloud.gd` | `Area3D` | Nuvem de veneno persistente; dano contínuo ao jogador dentro |
+| `scripts/economy/chest.gd` | `Node3D` | Baú entre waves; abre no interact, aciona painel de upgrades |
+| `scripts/economy/coin.gd` | `Area3D` | Moeda dropada por inimigos; coleta automática pelo raio do jogador |
+| `scripts/props/health_potion.gd` | `Node3D` | Poção de vida no mundo; restaura 2 HP, reaparece após 20s |
 | `scripts/hud.gd` | `CanvasLayer` | HP pips, kill counter, combo, wave announce, vignettes |
 | `scripts/ui/title_overlay.gd` | `CanvasLayer` | Título + lobby multiplayer (hospedar/entrar/iniciar) |
 | `scripts/ui/upgrade_panel.gd` | `Control` | Cards de upgrade com categoria/cor/ícone, animação escalonada |
@@ -151,6 +157,8 @@ Root
 | `"hud"` | `enemy_controller._die()` chama `register_kill()` |
 | `"spawner"` | NetworkManager / HUD para localizar o spawner |
 | `"block_spawn"` | Props que bloqueiam spawn de inimigos dentro de 3.5m |
+| `"chest"` | Baús interagíveis entre waves |
+| `"coins"` | Moedas coletáveis no chão |
 
 ### Multiplayer
 
