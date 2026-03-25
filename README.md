@@ -1,6 +1,6 @@
 # Greedy Bastards
 
-Arena melee FPS. Lute contra hordas infinitas de goblins com uma espada. Sem armas de fogo, sem magia — só você, uma lâmina e reflexos.
+Arena melee FPS. Lute contra hordas infinitas de goblins com uma espada. Jogue sozinho ou com até 3 amigos em co-op. Sem armas de fogo, sem magia — só você, uma lâmina e reflexos.
 
 > **[⬇ Baixar última versão](../../releases/latest)**
 
@@ -14,7 +14,8 @@ Arena melee FPS. Lute contra hordas infinitas de goblins com uma espada. Sem arm
 |---|---|
 | Mover | WASD |
 | Pular | Espaço |
-| **Atacar** | Mover o mouse rápido (flick) |
+| **Atacar (flick)** | Mover o mouse rápido |
+| **Atacar (click)** | Botão esquerdo — combo de até 3 hits |
 | **Bloquear / Aparar** | Segurar botão direito |
 | **Dash** | Duplo toque em qualquer direção WASD |
 | Arremessar espada | Botão direito enquanto empunha |
@@ -23,11 +24,10 @@ Arena melee FPS. Lute contra hordas infinitas de goblins com uma espada. Sem arm
 
 ### O ataque
 
-Não há botão de ataque. Você ataca **movendo o mouse com velocidade** — como um golpe de espada de verdade. A direção do flick determina o tipo de swing:
+Você tem dois modos de ataque:
 
-- Horizontal → corte lateral
-- Vertical → golpe de cima para baixo
-- Diagonal → combinação
+- **Flick** — mova o mouse com velocidade para golpear. A direção do movimento determina o tipo de swing: horizontal, vertical ou diagonal. Quanto mais rápido o flick, mais preciso o timing.
+- **Click** — botão esquerdo executa ataques rápidos encadeáveis. Até 3 hits em combo.
 
 ### Bloqueio e Parry
 
@@ -36,6 +36,18 @@ Segurar o botão direito levanta a espada. Se um inimigo atacar **exatamente nes
 ### Dash
 
 Toque duas vezes na mesma direção rapidamente para dar um dash. Útil para escapar de cercamentos ou fechar distância.
+
+---
+
+## Co-op Multiplayer
+
+Até **4 jogadores** via rede local ou internet:
+
+1. Um jogador clica em **Hospedar Jogo** e informa o IP para os outros
+2. Os outros jogadores clicam em **Entrar** e digitam o IP
+3. O host clica em **Iniciar Partida** quando todos estiverem conectados
+
+Os jogadores remotos aparecem como **névoa etérea** com a espada visível. A cor da névoa muda conforme a vida do jogador — azul quando cheio, amarelo na metade, vermelho quando crítico.
 
 ---
 
@@ -79,10 +91,11 @@ Os goblins se comunicam — morte de um aliado pode deixar outros com raiva (mai
 
 ## Download
 
-| Plataforma | Arquivo | Instruções |
-|---|---|---|
-| **Linux** x86_64 | `GreedyBastards-linux-x86_64.tar.gz` | Extrair → `chmod +x GreedyBastards.x86_64` → executar |
-| **Windows** x86_64 | `GreedyBastards-windows-x86_64.tar.gz` | Extrair → `GreedyBastards.exe` |
+| Plataforma | Arquivo |
+|---|---|
+| **Linux** x86_64 | `GreedyBastards.x86_64` |
+| **macOS** | `GreedyBastards.zip` |
+| **Windows** x86_64 | `GreedyBastards.exe` |
 
 Veja a aba **[Releases](../../releases)** para todas as versões.
 
@@ -90,5 +103,4 @@ Veja a aba **[Releases](../../releases)** para todas as versões.
 
 ## Sobre
 
-Godot 4.6 · Jolt Physics · GDScript
 Por **ZeD**
