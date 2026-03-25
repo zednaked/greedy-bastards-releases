@@ -4,6 +4,11 @@ var _status_label: Label
 var _start_btn: Button   # "INICIAR PARTIDA" — só no host com peers
 
 func _ready() -> void:
+	# Servidor dedicado: sem UI, aguarda jogadores conectarem
+	if NetworkManager.is_dedicated_server:
+		get_tree().paused = false
+		queue_free()
+		return
 	# Cliente entrando numa sessão já iniciada: pula o menu e vai direto para o jogo
 	if NetworkManager.is_multiplayer_session and not multiplayer.is_server():
 		get_tree().paused = false

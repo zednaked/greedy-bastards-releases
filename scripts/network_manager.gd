@@ -8,12 +8,22 @@ signal peer_connected(id: int)
 signal peer_disconnected(id: int)
 signal connection_failed
 signal connection_succeeded
+signal room_full  # emitido quando sala atinge MAX_CLIENTS
 
 # true apenas em sessões de rede ativas (false em single player)
 var is_multiplayer_session := false
 
+# true quando iniciado com --server (sem UI, headless)
+var is_dedicated_server := false
+
 # Peers conectados (sem contar o host)
 var connected_peers: Array[int] = []
+
+func _ready() -> void:
+	if "--server" in OS.get_cmdline_args():
+		is_dedicated_server = true
+		print("[SERVER] Modo servidor dedicado")
+		host_game()
 
 func host_game() -> void:
 	var peer := ENetMultiplayerPeer.new()
@@ -99,8 +109,16 @@ func _rpc_spawn_player(peer_id: int, pos_x: float, pos_z: float) -> void:
 
 func _on_peer_connected(id: int) -> void:
 	connected_peers.append(id)
-	print("NetworkManager: peer %d conectou" % id)
+	print("NetworkManager: peer %d conectou (%d/%d)" % [id, connected_peers.size() + 1, MAX_CLIENTS + 1])
 	peer_connected.emit(id)
+	# Sala cheia: inicia automaticamente e fecha para novas conexões
+	if connected_peers.size() >= MAX_CLIENTS:
+		print("NetworkManager: sala cheia — iniciando partida")
+		room_full.emit()
+		# Recusa novas conexões
+		if multiplayer.multiplayer_peer is ENetMultiplayerPeer:
+			(multiplayer.multiplayer_peer as ENetMultiplayerPeer).refuse_new_connections = true
+		start_game()
 
 func _on_peer_disconnected(id: int) -> void:
 	connected_peers.erase(id)
