@@ -10,6 +10,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Open `project.godot` in Godot 4.3+. No CLI build commands — use the Godot Editor. Run with F5 (Play) or F6 (Play current scene).
 
+### Regra: Multiplayer-first
+
+**Toda feature nova deve funcionar em multiplayer desde a implementação inicial.** Não existe "adiciono MP depois".
+
+Para cada novo sistema, considerar:
+- Authority guards onde necessário: `if not is_multiplayer_authority(): return`
+- Estado relevante sincronizado via RPC
+- Código exclusivo de rede guardado por `NetworkManager.is_multiplayer_session`
+- O que o servidor precisa executar vs o que os clientes precisam receber
+
 **Main scene**: `scenes/main.tscn`
 **Input map**: W/A/S/D movement, Space jump, double-tap dash, RMB throw/block, E interact (weapon pickup), Escape pause/cursor release. Attack is triggered by mouse flick, not a button.
 
