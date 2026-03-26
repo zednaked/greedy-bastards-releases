@@ -58,6 +58,14 @@ func _ready() -> void:
 	else:
 		_game_started = true
 
+func _find_any_player() -> Node3D:
+	for p in get_tree().get_nodes_in_group("player"):
+		if not is_instance_valid(p): continue
+		# Em multiplayer dedicado, ignora o nó authority=1 (servidor sem jogador local)
+		if NetworkManager.is_multiplayer_session and p.get_multiplayer_authority() == 1: continue
+		return p
+	return null
+
 func _cache_cages() -> void:
 	_cages.clear()
 	var props := get_tree().current_scene.get_node_or_null("Props")
@@ -69,7 +77,20 @@ func _cache_cages() -> void:
 
 func _process(delta: float) -> void:
 	if not _game_started:
-		return
+		# Verifica se há jogadores ativos para iniciar
+		if NetworkManager.is_dedicated_server:
+			var has_players := false
+			for p in get_tree().get_nodes_in_group("player"):
+				if p.get_multiplayer_authority() != 1 and is_instance_valid(p):
+					has_players = true
+					break
+			if not has_players:
+				return  # Sem jogadores, fica em espera
+			# Há jogador, inicia o jogo
+			_game_started = true
+			print("EnemySpawner: iniciando com jogador")
+		else:
+			return
 	# Em multiplayer, apenas o servidor controla o spawner
 	if NetworkManager.is_multiplayer_session and not multiplayer.is_server():
 		return
@@ -82,6 +103,8 @@ func _process(delta: float) -> void:
 		"spawning":
 			if _timer <= 0.0:
 				if _spawned < _to_spawn:
+					if _find_any_player() == null:
+						return  # sem jogador, pausa o spawning
 					_spawn_one()
 					_spawned += 1
 					_timer = spawn_interval
@@ -89,7 +112,19 @@ func _process(delta: float) -> void:
 					_state = "waiting"
 
 		"waiting":
-			# Checa todo frame — não depende de coroutine
+			# Se não há mais players, considera wave completa
+			if _player == null or not is_instance_valid(_player):
+				_player = get_tree().get_first_node_in_group("player")
+			# Conta apenas players que estão ativos (não morreram/desconectaram)
+			var active_players := 0
+			for p in get_tree().get_nodes_in_group("player"):
+				if is_instance_valid(p) and p.is_physics_processing():
+					active_players += 1
+			if active_players == 0:
+				# Sem players ativos, pausa o jogo
+				_state = "cooldown"
+				_timer = 10.0  # Espera 10s para reconexão
+				return
 			if get_tree().get_nodes_in_group("enemies").size() == 0:
 				_notify_hud_wave_clear()
 				_state = "cooldown"
@@ -133,6 +168,7 @@ func _spawn_one() -> void:
 	# Atualiza referência do jogador (pode haver múltiplos em CO-OP)
 	if _player == null or not is_instance_valid(_player):
 		_player = get_tree().get_first_node_in_group("player")
+	# Se não há players válidos, não spawna
 	if _player == null:
 		return
 
@@ -206,7 +242,8 @@ func _spawn_one() -> void:
 			"cage": use_cage
 		}
 		_live_enemy_cfg[eid] = cfg
-		rpc("_net_client_spawn", eid, pos, cfg)
+		if NetworkManager.connected_peers.size() > 0:
+			rpc("_net_client_spawn", eid, pos, cfg)
 
 	# Efeito de emergência da jaula — após todo o setup de escala/stats
 	if use_cage:
@@ -225,7 +262,7 @@ func _scaling_config() -> Dictionary:
 	}
 
 func _notify_hud_wave() -> void:
-	if NetworkManager.is_multiplayer_session:
+	if NetworkManager.is_multiplayer_session and NetworkManager.connected_peers.size() > 0:
 		rpc("_net_hud_set_wave", _wave, _to_spawn)
 	else:
 		var hud = get_tree().get_first_node_in_group("hud")
@@ -233,7 +270,7 @@ func _notify_hud_wave() -> void:
 			hud.set_wave(_wave, _to_spawn)
 
 func _notify_hud_wave_clear() -> void:
-	if NetworkManager.is_multiplayer_session:
+	if NetworkManager.is_multiplayer_session and NetworkManager.connected_peers.size() > 0:
 		rpc("_net_hud_wave_clear")
 	else:
 		var hud = get_tree().get_first_node_in_group("hud")
@@ -269,9 +306,35 @@ func _net_client_spawn(eid: int, pos: Vector3, cfg: Dictionary) -> void:
 	if cfg.get("cage", false):
 		enemy.emerge_from_cage()
 
-# Servidor → todos: slowmo de morte + registra kill no HUD (roteado pelo spawner)
-@rpc("authority", "call_local", "reliable")
+# Servidor → clientes: cria projectile visual (para ranged goblins)
+@rpc("authority", "call_remote", "reliable")
+func _net_spawn_projectile(origin: Vector3, target: Vector3, damage: int, speed: float) -> void:
+	var proj_scene := load("res://scenes/enemies/projectile.tscn") as PackedScene
+	if proj_scene == null:
+		return
+	var proj := proj_scene.instantiate()
+	get_tree().current_scene.add_child(proj)
+	proj.damage = damage
+	proj.launch(origin, target, speed)
+
+# Servidor → clientes: cria projectile de bomba
+@rpc("authority", "call_remote", "reliable")
+func _net_spawn_bomb(origin: Vector3, target: Vector3, is_poison: bool) -> void:
+	var b_scene: PackedScene
+	if is_poison:
+		b_scene = load("res://scenes/enemies/poison_bomb.tscn") as PackedScene
+	else:
+		b_scene = load("res://scenes/enemies/bomb.tscn") as PackedScene
+	if b_scene == null:
+		return
+	var bomb := b_scene.instantiate()
+	get_tree().current_scene.add_child(bomb)
+	bomb.launch(origin, target, 12.0)
+
+# Servidor → todos: registra kill no HUD + slowmo (call_local executa no servidor, RPC notifica clientes)
+@rpc("any_peer", "reliable")
 func _net_kill_fx() -> void:
+	if not multiplayer.is_server(): return  # apenas servidor processa
 	_slowmo_count += 1
 	Engine.time_scale = 0.15
 	await get_tree().create_timer(0.18, true, false, true).timeout
@@ -281,6 +344,20 @@ func _net_kill_fx() -> void:
 	var hud = get_tree().get_first_node_in_group("hud")
 	if hud and hud.has_method("register_kill"):
 		hud.register_kill()
+	if NetworkManager.connected_peers.size() > 0:
+		rpc("_net_register_kill")  # Notifica clientes
+
+# Cliente: recebe kill notification + slowmo
+@rpc("any_peer", "reliable")
+func _net_register_kill() -> void:
+	if is_multiplayer_authority(): return  # não-processa no peer que originou (servidor)
+	var hud = get_tree().get_first_node_in_group("hud")
+	if hud and hud.has_method("register_kill"):
+		hud.register_kill()
+	# Clientes também aplicam slowmo
+	Engine.time_scale = 0.15
+	await get_tree().create_timer(0.18, true, false, true).timeout
+	Engine.time_scale = 1.0
 
 # Servidor → cliente: estado de um inimigo (roteado pelo spawner para evitar "node not found")
 @rpc("authority", "unreliable_ordered")
@@ -317,7 +394,7 @@ func _net_hud_wave_clear() -> void:
 		hud.show_wave_clear()
 
 func _spawn_chest() -> void:
-	if NetworkManager.is_multiplayer_session:
+	if NetworkManager.is_multiplayer_session and NetworkManager.connected_peers.size() > 0:
 		rpc("_net_spawn_chest")
 	else:
 		_do_spawn_chest()
@@ -337,3 +414,36 @@ func _do_spawn_chest() -> void:
 	var chest := c_scene.instantiate()
 	get_tree().current_scene.add_child(chest)
 	chest.global_position = Vector3(0.0, 0.1, 0.0)
+
+# Reseta o jogo para estado inicial (quando todos saem)
+func reset_wave() -> void:
+	_wave = 0
+	_to_spawn = 0
+	_spawned = 0
+	_state = "idle"
+	_timer = 1.0
+	_eid_counter = 0
+	_live_enemy_cfg.clear()
+	_slowmo_count = 0
+	_game_started = false
+	
+	# Limpa baús
+	for c in get_tree().get_nodes_in_group("chest"):
+		if is_instance_valid(c):
+			c.queue_free()
+	
+	# Notifica clientes sobre reset
+	if NetworkManager.is_multiplayer_session and NetworkManager.connected_peers.size() > 0:
+		rpc("_net_reset_game")
+	print("EnemySpawner: jogo resetado para wave 0")
+
+@rpc("authority", "call_remote", "reliable")
+func _net_reset_game() -> void:
+	_wave = 0
+	_state = "idle"
+	var hud := get_tree().get_first_node_in_group("hud")
+	if hud:
+		hud.set_wave(1, 0)
+		hud.kills = 0
+		if hud.has_method("update_hud"):
+			hud.update_hud()

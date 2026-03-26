@@ -87,7 +87,8 @@ func start_game() -> void:
 	if not multiplayer.is_server():
 		return
 	# Clientes carregam a cena; o host já está nela (só descarta o overlay)
-	rpc("_rpc_load_game")
+	if connected_peers.size() > 0:
+		rpc("_rpc_load_game")
 	print("NetworkManager: partida iniciada")
 
 # ─── RPCs ──────────────────────────────────────────────────────────────────────
@@ -106,7 +107,8 @@ func _rpc_client_ready() -> void:
 	ready_peers.append(peer_id)
 	var angle := randf() * TAU
 	var r := 8.0
-	rpc("_rpc_spawn_player", peer_id, cos(angle) * r, sin(angle) * r)
+	if connected_peers.size() > 0:
+		rpc("_rpc_spawn_player", peer_id, cos(angle) * r, sin(angle) * r)
 	# Sincroniza inimigos já vivos para o peer recém-conectado
 	var spawner := get_tree().get_first_node_in_group("spawner")
 	if spawner and spawner.has_method("sync_enemies_to_peer"):
@@ -135,6 +137,9 @@ func _rpc_spawn_player(peer_id: int, pos_x: float, pos_z: float) -> void:
 func _on_peer_connected(id: int) -> void:
 	connected_peers.append(id)
 	print("NetworkManager: peer %d conectou (%d/%d)" % [id, connected_peers.size() + 1, MAX_CLIENTS + 1])
+	# Detecta crash/fechamento em ~5s (padrão ENet pode chegar a 30s)
+	if multiplayer.multiplayer_peer is ENetMultiplayerPeer:
+		(multiplayer.multiplayer_peer as ENetMultiplayerPeer).set_peer_timeout(id, 0, 2000, 5000)
 	peer_connected.emit(id)
 	if connected_peers.size() >= MAX_CLIENTS:
 		# Sala cheia: fecha para novas conexões
@@ -147,6 +152,7 @@ func _on_peer_connected(id: int) -> void:
 		start_game()
 
 func _on_peer_disconnected(id: int) -> void:
+	var was_connected := id in connected_peers
 	connected_peers.erase(id)
 	ready_peers.erase(id)
 	print("NetworkManager: peer %d desconectou" % id)
@@ -156,6 +162,48 @@ func _on_peer_disconnected(id: int) -> void:
 		var player_node := get_tree().current_scene.get_node_or_null("Player_%d" % id)
 		if player_node:
 			player_node.queue_free()
+	
+	# Se não restam jogadores, reseta o jogo no servidor
+	if multiplayer.is_server():
+		await get_tree().process_frame
+		await get_tree().process_frame
+		_check_reset_game()
+
+func _check_reset_game() -> void:
+	if not is_dedicated_server:
+		return
+	# Usa ready_peers (não connected_peers): peer novo só entra aqui depois de
+	# carregar a cena, então uma reconexão imediata não bloqueia o reset.
+	if ready_peers.size() > 0:
+		return
+
+	print("NetworkManager: sem jogadores prontos, resetando jogo...")
+	_dedicated_game_started = false
+
+	# Reabre sala para novos jogadores
+	if multiplayer.multiplayer_peer is ENetMultiplayerPeer:
+		(multiplayer.multiplayer_peer as ENetMultiplayerPeer).refuse_new_connections = false
+
+	_clear_all_game_objects()
+	print("NetworkManager: aguardando novos jogadores...")
+
+func _clear_all_game_objects() -> void:
+	# Limpa todos os inimigos
+	var enemies := get_tree().get_nodes_in_group("enemies")
+	for e in enemies:
+		if is_instance_valid(e):
+			e.queue_free()
+	# Limpa todos os baús
+	var chests := get_tree().get_nodes_in_group("chest")
+	for c in chests:
+		if is_instance_valid(c):
+			c.queue_free()
+	# Reseta o spawner completamente
+	var spawner := get_tree().get_first_node_in_group("spawner")
+	if spawner and spawner.has_method("reset_wave"):
+		spawner.reset_wave()
+	# ResetEngine time scale (pode estar em slowmo)
+	Engine.time_scale = 1.0
 
 func _on_connected_to_server() -> void:
 	print("NetworkManager: conectado ao servidor!")

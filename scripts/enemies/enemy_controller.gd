@@ -51,7 +51,12 @@ func _find_nearest_player() -> Node3D:
 	var nearest: Node3D = null
 	var min_dist := INF
 	for p in get_tree().get_nodes_in_group("player"):
-		if not is_instance_valid(p): continue
+		if not is_instance_valid(p) or not p.is_inside_tree(): continue
+		# Em multiplayer o ghost do jogador no servidor tem física desabilitada — não filtra por isso
+		if not NetworkManager.is_multiplayer_session and not p.is_physics_processing(): continue
+		# Ignora jogador morto
+		var hp = p.get("health")
+		if hp != null and hp <= 0: continue
 		var d := global_position.distance_squared_to(p.global_position)
 		if d < min_dist:
 			min_dist = d
@@ -561,6 +566,15 @@ func _physics_process(delta: float) -> void:
 			if nearest != null:
 				player = nearest
 
+	# Sem jogador válido em multiplayer: congela IA e espera um alvo aparecer
+	if NetworkManager.is_multiplayer_session and not is_instance_valid(player):
+		player = _find_nearest_player()
+		if not is_instance_valid(player):
+			velocity.x = 0.0
+			velocity.z = 0.0
+			move_and_slide()
+			return
+
 	# Safety net: NaN velocity (de knockback com vetor zero normalizado) congela o enemy
 	if not velocity.is_finite():
 		velocity = Vector3.ZERO
@@ -769,7 +783,12 @@ func _physics_process(delta: float) -> void:
 
 	if is_dead:
 		return  # física parada — set_physics_process(false) cuida disso
-	if not is_instance_valid(player) or is_attacking:
+	# Atualiza referência do player se ficou inválido (desconectou ou morreu)
+	if not is_instance_valid(player) or (is_instance_valid(player) and not player.is_physics_processing()):
+		player = _find_nearest_player()
+		if not is_instance_valid(player):
+			return  # sem players válidos, para de se mover
+	if is_attacking:
 		move_and_slide()
 		return
 
@@ -1087,20 +1106,30 @@ func throw_cooldown_time() -> float:
 	return attack_cooldown_time * 1.5
 
 func _launch_projectile() -> void:
+	# Atualiza player se necessário
+	if not is_instance_valid(player) or (is_instance_valid(player) and not player.is_physics_processing()):
+		player = _find_nearest_player()
 	if not is_instance_valid(player):
 		return
-	var proj_scene := projectile_scene
-	if proj_scene == null:
-		proj_scene = load("res://scenes/enemies/projectile.tscn") as PackedScene
-	if proj_scene == null:
-		return
-	var proj := proj_scene.instantiate()
-	get_tree().current_scene.add_child(proj)
 	var origin := global_position + Vector3(0.0, 1.4, 0.0)
-	# Aim slightly ahead of player based on their velocity
 	var target := player.global_position + Vector3(0.0, 0.9, 0.0)
-	proj.damage = throw_damage
-	proj.launch(origin, target, throw_speed)
+	
+	# Apenas servidor cria projectile + notifica clientes
+	if NetworkManager.is_multiplayer_session and multiplayer.is_server():
+		var spawner := get_tree().get_first_node_in_group("spawner")
+		if spawner:
+			spawner.rpc("_net_spawn_projectile", origin, target, throw_damage, throw_speed)
+	else:
+		# Single player: cria local
+		var proj_scene := projectile_scene
+		if proj_scene == null:
+			proj_scene = load("res://scenes/enemies/projectile.tscn") as PackedScene
+		if proj_scene == null:
+			return
+		var proj := proj_scene.instantiate()
+		get_tree().current_scene.add_child(proj)
+		proj.damage = throw_damage
+		proj.launch(origin, target, throw_speed)
 
 # ─── Sistema R — Feint ────────────────────────────────────────────────────────
 
@@ -1168,6 +1197,9 @@ func _on_jump_land() -> void:
 	_jiggle_vel.y -= 0.8
 	_jiggle_vel.x += 0.4
 	_jiggle_vel.z += 0.4
+	# Atualiza player se necessário
+	if not is_instance_valid(player) or (is_instance_valid(player) and not player.is_physics_processing()):
+		player = _find_nearest_player()
 	if not is_instance_valid(player) or is_dead: return
 	var d := global_position.distance_to(player.global_position)
 	if d < 2.2:
@@ -1277,18 +1309,28 @@ func _start_throw_bomb() -> void:
 	is_throwing = false
 
 func _launch_bomb() -> void:
+	# Atualiza player se necessário
+	if not is_instance_valid(player) or (is_instance_valid(player) and not player.is_physics_processing()):
+		player = _find_nearest_player()
 	if not is_instance_valid(player): return
-	var b_scene := bomb_scene
-	if b_scene == null:
-		b_scene = load("res://scenes/enemies/bomb.tscn") as PackedScene
-	if b_scene == null: return
-	var bomb := b_scene.instantiate()
-	get_tree().current_scene.add_child(bomb)
 	var origin := global_position + Vector3(0.0, 1.4, 0.0)
-	# Land slightly offset from player (area denial, not instant hit)
 	var offset := Vector3(randf_range(-2.0, 2.0), 0.0, randf_range(-2.0, 2.0))
 	var target := player.global_position + offset
-	bomb.launch(origin, target, 12.0)
+	
+	# Apenas servidor cria bomba + notifica clientes
+	if NetworkManager.is_multiplayer_session and multiplayer.is_server():
+		var spawner := get_tree().get_first_node_in_group("spawner")
+		if spawner:
+			spawner.rpc("_net_spawn_bomb", origin, target, false)
+	else:
+		# Single player: cria local
+		var b_scene := bomb_scene
+		if b_scene == null:
+			b_scene = load("res://scenes/enemies/bomb.tscn") as PackedScene
+		if b_scene == null: return
+		var bomb := b_scene.instantiate()
+		get_tree().current_scene.add_child(bomb)
+		bomb.launch(origin, target, 12.0)
 
 # ─── Gas Bomber ───────────────────────────────────────────────────────────────
 
@@ -1318,17 +1360,28 @@ func _start_throw_poison_bomb() -> void:
 	is_throwing = false
 
 func _launch_poison_bomb() -> void:
+	# Atualiza player se necessário
+	if not is_instance_valid(player) or (is_instance_valid(player) and not player.is_physics_processing()):
+		player = _find_nearest_player()
 	if not is_instance_valid(player): return
-	var pb_scene := poison_bomb_scene
-	if pb_scene == null:
-		pb_scene = load("res://scenes/enemies/poison_bomb.tscn") as PackedScene
-	if pb_scene == null: return
-	var bomb := pb_scene.instantiate()
-	get_tree().current_scene.add_child(bomb)
 	var origin := global_position + Vector3(0.0, 1.4, 0.0)
 	var offset := Vector3(randf_range(-1.5, 1.5), 0.0, randf_range(-1.5, 1.5))
 	var target := player.global_position + offset
-	bomb.launch(origin, target, 11.0)
+	
+	# Apenas servidor cria bomba + notifica clientes
+	if NetworkManager.is_multiplayer_session and multiplayer.is_server():
+		var spawner := get_tree().get_first_node_in_group("spawner")
+		if spawner:
+			spawner.rpc("_net_spawn_bomb", origin, target, true)
+	else:
+		# Single player: cria local
+		var pb_scene := poison_bomb_scene
+		if pb_scene == null:
+			pb_scene = load("res://scenes/enemies/poison_bomb.tscn") as PackedScene
+		if pb_scene == null: return
+		var bomb := pb_scene.instantiate()
+		get_tree().current_scene.add_child(bomb)
+		bomb.launch(origin, target, 11.0)
 
 # ─── Trapper ──────────────────────────────────────────────────────────────────
 
@@ -1449,6 +1502,9 @@ func _start_charge() -> void:
 
 func _update_charge(delta: float) -> void:
 	_charge_timer -= delta
+	# Atualiza player se necessário
+	if not is_instance_valid(player) or (is_instance_valid(player) and not player.is_physics_processing()):
+		player = _find_nearest_player()
 	if not is_instance_valid(player) or is_dead or _charge_timer <= 0.0:
 		is_charging = false
 		return
@@ -1875,8 +1931,8 @@ func _die() -> void:
 		var eid := name.trim_prefix("Enemy_").to_int()
 		if not is_instance_valid(_net_spawner):
 			_net_spawner = get_tree().get_first_node_in_group("spawner")
-		if _net_spawner:
-			for pid in NetworkManager.ready_peers:
+		if _net_spawner and NetworkManager.connected_peers.size() > 0:
+			for pid in NetworkManager.connected_peers:
 				_net_spawner.rpc_id(pid, "_net_enemy_state", eid, global_position, rotation.y, 0, true, 0)
 	# Reset de todos os estados — garante que nenhuma flag fica "presa" no zombie state
 	is_charging    = false
@@ -1936,18 +1992,12 @@ func _die() -> void:
 		if is_instance_valid(self): queue_free()
 	, CONNECT_ONE_SHOT)
 
-	# Slowmo: em multiplayer sincroniza para todos os clientes via spawner
-	if NetworkManager.is_multiplayer_session:
+	# Slowmo: em multiplayer sincroniza para todos via spawner (servidor aplica, clientes recebem _net_register_kill)
+	if NetworkManager.is_multiplayer_session and multiplayer.is_server():
 		if not is_instance_valid(_net_spawner):
 			_net_spawner = get_tree().get_first_node_in_group("spawner")
-		if _net_spawner:
+		if _net_spawner and NetworkManager.connected_peers.size() > 0:
 			_net_spawner.rpc("_net_kill_fx")
-	_slowmo_count += 1
-	Engine.time_scale = 0.15
-	await get_tree().create_timer(0.18, true, false, true).timeout
-	_slowmo_count = maxi(0, _slowmo_count - 1)
-	if _slowmo_count == 0:
-		Engine.time_scale = 1.0
 	var tween := create_tween()
 	var visual := goblin_mesh if goblin_mesh != null else self
 	var min_scale := Vector3(0.001, 0.001, 0.001)

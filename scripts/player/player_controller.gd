@@ -235,8 +235,8 @@ func _physics_process(delta: float) -> void:
 		global_position.x = flat.x
 		global_position.z = flat.y
 
-	# Sync de posição para outros jogadores em multiplayer
-	if NetworkManager.is_multiplayer_session:
+	# Sync de posição: apenas a authority (dono do player) envia para todos
+	if NetworkManager.is_multiplayer_session and is_multiplayer_authority():
 		_net_sync_timer -= delta
 		if _net_sync_timer <= 0.0:
 			_net_sync_timer = 0.05  # 20 Hz
@@ -271,6 +271,12 @@ func _start_dash(action: String) -> void:
 	var hud := get_tree().get_first_node_in_group("hud")
 	if hud and hud.has_method("flash_dash"):
 		hud.flash_dash()
+	# Apenas o servidor envia flashes para clientes
+	if NetworkManager.is_multiplayer_session and multiplayer.is_server():
+		var hud_node := get_tree().current_scene.get_node_or_null("HUD")
+		if hud_node and NetworkManager.connected_peers.size() > 0:
+			for pid in NetworkManager.connected_peers:
+				hud_node.rpc_id(pid, "_net_flash_dash")
 
 	# Impacto físico: trauma + punch de câmera pra frente
 	add_trauma(0.28)
@@ -654,6 +660,14 @@ func take_damage(amount: int, knockback: Vector3 = Vector3.ZERO) -> void:
 	health -= int(amount * unarmed_mult)
 	_invincible_timer = 0.1 if unarmed else invincibility_time
 	add_trauma(0.65 if unarmed else 0.45)
+	if has_node("/root/ScreenFX"):
+		get_node("/root/ScreenFX").trigger_hit_flash(0.8)
+	# Notifica outros clientes sobre o flash de dano (apenas servidor envia)
+	if NetworkManager.is_multiplayer_session and multiplayer.is_server():
+		var hud_node := get_tree().current_scene.get_node_or_null("HUD")
+		if hud_node and NetworkManager.connected_peers.size() > 0:
+			for pid in NetworkManager.connected_peers:
+				hud_node.rpc_id(pid, "_net_flash_damage")
 	if knockback != Vector3.ZERO:
 		velocity.x += knockback.x
 		velocity.z += knockback.z
@@ -714,6 +728,12 @@ func add_combo_kill() -> void:
 		var hud = get_tree().get_first_node_in_group("hud")
 		if hud and hud.has_method("flash_gold_vignette"):
 			hud.flash_gold_vignette()
+		# Apenas o servidor envia flashes para clientes
+		if NetworkManager.is_multiplayer_session and multiplayer.is_server():
+			var hud_node := get_tree().current_scene.get_node_or_null("HUD")
+			if hud_node and NetworkManager.connected_peers.size() > 0:
+				for pid in NetworkManager.connected_peers:
+					hud_node.rpc_id(pid, "_net_flash_gold")
 	_notify_hud_combo()
 
 func _notify_hud_combo() -> void:
