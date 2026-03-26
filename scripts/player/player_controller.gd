@@ -109,6 +109,13 @@ var _last_dir_action := ""
 var _last_dir_time := -999.0
 
 func _ready() -> void:
+	# Remove o nó Player pré-colocado sem dono real (authority 1 = servidor sem player).
+	# Aplica no servidor dedicado E nos clientes conectados a ele.
+	# Em listen-server o host (peer 1) É um jogador real — não remove.
+	if get_multiplayer_authority() == 1 and NetworkManager.is_multiplayer_session:
+		if NetworkManager.is_dedicated_server or not multiplayer.is_server():
+			queue_free()
+			return
 	add_to_group("player")
 	if is_multiplayer_authority():
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)

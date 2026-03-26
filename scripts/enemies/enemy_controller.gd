@@ -266,10 +266,12 @@ var is_dead := false
 
 # ─── Multiplayer ──────────────────────────────────────────────────────────────
 var _last_hit_by: int = 0          # peer ID do último atacante
-var _net_sync_timer: float = 0.0
+var _net_sync_timer: float = 0.4  # delay inicial para o _net_client_spawn (reliable) chegar antes do primeiro sync (unreliable)
 var _net_target_pos: Vector3 = Vector3.ZERO
 var _net_target_rot_y: float = 0.0
 var _net_pos_ready: bool = false    # recebeu ao menos uma atualização
+var _net_anim_flags: int = 0        # flags de animação recebidas do servidor
+var _net_spawner: Node = null       # referência ao spawner (para rotear RPCs)
 var is_attacking := false
 var is_in_windup := false
 var is_in_strike := false
@@ -294,11 +296,19 @@ func _ready() -> void:
 	add_to_group("enemies")
 	health = max_health
 
+	if NetworkManager.is_multiplayer_session and multiplayer.is_server():
+		_net_spawner = get_tree().get_first_node_in_group("spawner")
+
 	# Modo puppet: cliente recebe posição via RPC, sem IA, sem colisão
 	if get_meta("is_net_puppet", false):
 		_net_target_pos = global_position
-		set_collision_layer_value(1, false)
+		# Mantém layer para que o hitbox da espada detecte o puppet
+		# Desativa mask para não colidir com cenário/outros corpos
 		set_collision_mask_value(1, false)
+		if goblin_mesh:
+			base_mesh_pos = goblin_mesh.position
+			await get_tree().process_frame
+			_cache_skeleton()
 		return  # physics_process continua ativo para interpolação de posição
 
 	player = _find_nearest_player()
@@ -358,15 +368,17 @@ func _ready() -> void:
 
 # ─── RPCs de Multiplayer ──────────────────────────────────────────────────────
 
-# Servidor → clientes: atualiza posição/estado do inimigo puppet
-@rpc("authority", "unreliable_ordered")
-func _net_receive_enemy_state(pos: Vector3, rot_y: float, hp: int, dead: bool) -> void:
+# Chamado pelo spawner (via RPC no spawner) — sem RPC direta no enemy node
+func _apply_net_state(pos: Vector3, rot_y: float, hp: int, dead: bool, anim_flags: int = 0) -> void:
 	if not get_meta("is_net_puppet", false):
 		return
 	_net_target_pos = pos
 	_net_target_rot_y = rot_y
 	_net_pos_ready = true
 	health = hp
+	if anim_flags != _net_anim_flags:
+		_net_anim_flags = anim_flags
+		_apply_puppet_anim_flags(anim_flags)
 	if dead and not is_dead:
 		_die_puppet()
 
@@ -386,22 +398,7 @@ func rpc_take_hit(knockback: Vector3, attacker_peer_id: int) -> void:
 	_last_hit_by = attacker_peer_id
 	take_hit(knockback)
 
-# Servidor → clientes: aplica slowmo de morte
-@rpc("authority", "call_remote", "reliable")
-func _net_apply_slowmo() -> void:
-	_slowmo_count += 1
-	Engine.time_scale = 0.15
-	await get_tree().create_timer(0.18, true, false, true).timeout
-	_slowmo_count = maxi(0, _slowmo_count - 1)
-	if _slowmo_count == 0:
-		Engine.time_scale = 1.0
-
-# Servidor → todos: registra kill no HUD de cada peer
-@rpc("authority", "call_local", "reliable")
-func _net_register_kill() -> void:
-	var hud = get_tree().get_first_node_in_group("hud")
-	if hud and hud.has_method("register_kill"):
-		hud.register_kill()
+# (slowmo e register_kill foram movidos para enemy_spawner._net_kill_fx)
 
 # Morte visual apenas no cliente (sem lógica de jogo)
 func _die_puppet() -> void:
@@ -510,11 +507,36 @@ func _slerp_bone(bone_name: String, target: Quaternion, t: float) -> void:
 # ─── Física ───────────────────────────────────────────────────────────────────
 
 func _physics_process(delta: float) -> void:
-	# Modo puppet: apenas interpola posição recebida via RPC
+	# Modo puppet: interpola posição e anima baseado no movimento
 	if get_meta("is_net_puppet", false):
 		if _net_pos_ready:
+			var prev_pos := global_position
 			global_position = global_position.lerp(_net_target_pos, delta * 12.0)
 			rotation.y = lerp_angle(rotation.y, _net_target_rot_y, delta * 12.0)
+			if _skeleton:
+				var moved := global_position.distance_to(prev_pos)
+				var f := _net_anim_flags
+				if f & 16:  # blocking_stance
+					_sb("bra.R", Quaternion(Vector3.FORWARD,  1.2))
+					_sb("bra.L", Quaternion(Vector3.FORWARD, -1.2))
+					_sb("coluna", Quaternion(Vector3.RIGHT, -0.2))
+				elif f & 2:  # windup
+					_pose_windup(1.0)
+				elif f & 4:  # strike
+					_pose_strike(1.0)
+				elif f & 64:  # charging
+					_sb("coluna", Quaternion(Vector3.RIGHT, -0.4))
+					_sb("cabeca", Quaternion(Vector3.RIGHT, 0.3))
+					_sb("bra.R",  Quaternion(Vector3.RIGHT, -0.3))
+					_sb("bra.L",  Quaternion(Vector3.RIGHT, -0.3))
+				elif f & 32:  # jumping
+					_sb("coluna", Quaternion(Vector3.RIGHT, 0.55))
+					_sb("coxa.R", Quaternion(Vector3.RIGHT, 0.4))
+					_sb("coxa.L", Quaternion(Vector3.RIGHT, 0.4))
+				elif moved > 0.001:
+					_animate_run(delta)
+				else:
+					_animate_idle(delta)
 		return
 
 	# Em multiplayer, IA roda apenas no servidor
@@ -526,7 +548,14 @@ func _physics_process(delta: float) -> void:
 		_net_sync_timer -= delta
 		if _net_sync_timer <= 0.0:
 			_net_sync_timer = 0.066  # ~15 Hz — sync posição para clientes
-			rpc("_net_receive_enemy_state", global_position, rotation.y, health, is_dead)
+			if not NetworkManager.ready_peers.is_empty() and not is_dead:
+				var eid := name.trim_prefix("Enemy_").to_int()
+				var flags := _pack_anim_flags()
+				if not is_instance_valid(_net_spawner):
+					_net_spawner = get_tree().get_first_node_in_group("spawner")
+				if _net_spawner:
+					for pid in NetworkManager.ready_peers:
+						_net_spawner.rpc_id(pid, "_net_enemy_state", eid, global_position, rotation.y, health, false, flags)
 			# Retarget: verifica se há jogador mais próximo
 			var nearest := _find_nearest_player()
 			if nearest != null:
@@ -1630,6 +1659,32 @@ func _pose_recover(t: float) -> void:
 	_slerp_bone("clav.R", Quaternion.IDENTITY, t * 0.6)
 	_slerp_bone("coluna", Quaternion.IDENTITY, t * 0.4)
 
+# ─── Multiplayer: flags de animação ──────────────────────────────────────────
+
+# Bit layout: 1=rage 2=windup 4=strike 8=stumble 16=blocking 32=jumping 64=charging
+func _pack_anim_flags() -> int:
+	var f := 0
+	if _is_raging:         f |= 1
+	if is_in_windup:       f |= 2
+	if is_in_strike:       f |= 4
+	if is_stumbling:       f |= 8
+	if is_blocking_stance: f |= 16
+	if is_jumping:         f |= 32
+	if is_charging:        f |= 64
+	return f
+
+func _apply_puppet_anim_flags(flags: int) -> void:
+	var raging := (flags & 1) != 0
+	if raging != _is_raging:
+		_is_raging = raging
+		_set_mesh_override(_rage_mat if raging else null)
+	is_in_windup       = (flags & 2) != 0
+	is_in_strike       = (flags & 4) != 0
+	is_stumbling       = (flags & 8) != 0
+	is_blocking_stance = (flags & 16) != 0
+	is_jumping         = (flags & 32) != 0
+	is_charging        = (flags & 64) != 0
+
 func _do_attack_hit_with_force(kb: float) -> void:
 	if is_dead or not is_instance_valid(player): return
 	var dist := global_position.distance_to(player.global_position)
@@ -1648,6 +1703,7 @@ func _do_attack_hit_with_force(kb: float) -> void:
 
 func take_hit(knockback: Vector3) -> void:
 	if is_dead: return
+	if NetworkManager.is_multiplayer_session and not multiplayer.is_server(): return
 	# Guard: vetor zero ou NaN normalizado → NaN no velocity → freeze permanente
 	if not knockback.is_finite() or knockback.length_squared() < 0.0001:
 		knockback = Vector3.BACK * 2.0
@@ -1812,7 +1868,16 @@ func _play_blood(direction: Vector3 = Vector3.UP) -> void:
 
 func _die() -> void:
 	if is_dead: return
+	if NetworkManager.is_multiplayer_session and not multiplayer.is_server(): return
 	is_dead = true
+	# Notifica clientes imediatamente para deletar o puppet antes de qualquer RPC de hit chegar
+	if NetworkManager.is_multiplayer_session and not NetworkManager.ready_peers.is_empty():
+		var eid := name.trim_prefix("Enemy_").to_int()
+		if not is_instance_valid(_net_spawner):
+			_net_spawner = get_tree().get_first_node_in_group("spawner")
+		if _net_spawner:
+			for pid in NetworkManager.ready_peers:
+				_net_spawner.rpc_id(pid, "_net_enemy_state", eid, global_position, rotation.y, 0, true, 0)
 	# Reset de todos os estados — garante que nenhuma flag fica "presa" no zombie state
 	is_charging    = false
 	is_throwing    = false
@@ -1871,9 +1936,12 @@ func _die() -> void:
 		if is_instance_valid(self): queue_free()
 	, CONNECT_ONE_SHOT)
 
-	# Slowmo: em multiplayer sincroniza para todos os clientes
+	# Slowmo: em multiplayer sincroniza para todos os clientes via spawner
 	if NetworkManager.is_multiplayer_session:
-		rpc("_net_apply_slowmo")
+		if not is_instance_valid(_net_spawner):
+			_net_spawner = get_tree().get_first_node_in_group("spawner")
+		if _net_spawner:
+			_net_spawner.rpc("_net_kill_fx")
 	_slowmo_count += 1
 	Engine.time_scale = 0.15
 	await get_tree().create_timer(0.18, true, false, true).timeout
@@ -1900,10 +1968,8 @@ func _die() -> void:
 					break
 	elif is_instance_valid(player) and player.has_method("add_combo_kill"):
 		player.add_combo_kill()
-	# Kill counter: em multiplayer notifica todos via RPC
-	if NetworkManager.is_multiplayer_session:
-		rpc("_net_register_kill")
-	else:
+	# Kill counter: servidor já registrou kill via _net_kill_fx (call_local no spawner)
+	if not NetworkManager.is_multiplayer_session:
 		var hud = get_tree().get_first_node_in_group("hud")
 		if hud and hud.has_method("register_kill"):
 			hud.register_kill()

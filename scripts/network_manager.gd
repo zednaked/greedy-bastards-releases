@@ -8,7 +8,8 @@ signal peer_connected(id: int)
 signal peer_disconnected(id: int)
 signal connection_failed
 signal connection_succeeded
-signal room_full  # emitido quando sala atinge MAX_CLIENTS
+signal room_full   # emitido quando sala atinge MAX_CLIENTS
+signal game_started  # emitido quando primeiro jogador está pronto
 
 # true apenas em sessões de rede ativas (false em single player)
 var is_multiplayer_session := false
@@ -16,11 +17,16 @@ var is_multiplayer_session := false
 # true quando iniciado com --server (sem UI, headless)
 var is_dedicated_server := false
 
+var _dedicated_game_started := false
+
 # Peers conectados (sem contar o host)
 var connected_peers: Array[int] = []
 
+# Peers que enviaram _rpc_client_ready (cena carregada, prontos para receber sync)
+var ready_peers: Array[int] = []
+
 func _ready() -> void:
-	if "--server" in OS.get_cmdline_args():
+	if "--server" in OS.get_cmdline_args() or "--server" in OS.get_cmdline_user_args():
 		is_dedicated_server = true
 		print("[SERVER] Modo servidor dedicado")
 		host_game()
@@ -38,11 +44,20 @@ func host_game() -> void:
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	print("NetworkManager: hospedando na porta %d" % PORT)
 
-func join_game(ip: String) -> void:
+func join_game(address: String) -> void:
+	# Limpa conexão anterior se existir
+	close()
+	# Suporta "host:porta" ou só "host" (usa PORT padrão)
+	var host := address
+	var port := PORT
+	if ":" in address:
+		var parts := address.split(":", false, 1)
+		host = parts[0]
+		port = int(parts[1]) if parts.size() > 1 else PORT
 	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_client(ip, PORT)
+	var err := peer.create_client(host, port)
 	if err != OK:
-		push_error("NetworkManager: falha ao conectar em %s:%d (erro %d)" % [ip, PORT, err])
+		push_error("NetworkManager: falha ao conectar em %s:%d (erro %d)" % [host, port, err])
 		connection_failed.emit()
 		return
 	multiplayer.multiplayer_peer = peer
@@ -50,7 +65,7 @@ func join_game(ip: String) -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-	print("NetworkManager: conectando em %s:%d" % [ip, PORT])
+	print("NetworkManager: conectando em %s:%d" % [host, port])
 
 func close() -> void:
 	is_multiplayer_session = false
@@ -73,6 +88,7 @@ func start_game() -> void:
 		return
 	# Clientes carregam a cena; o host já está nela (só descarta o overlay)
 	rpc("_rpc_load_game")
+	print("NetworkManager: partida iniciada")
 
 # ─── RPCs ──────────────────────────────────────────────────────────────────────
 
@@ -87,10 +103,19 @@ func _rpc_client_ready() -> void:
 		return
 	var peer_id := multiplayer.get_remote_sender_id()
 	print("NetworkManager: peer %d pronto, spawnando jogador" % peer_id)
-	# Spawn do jogador para todos os peers (call_local: servidor também cria)
+	ready_peers.append(peer_id)
 	var angle := randf() * TAU
 	var r := 8.0
 	rpc("_rpc_spawn_player", peer_id, cos(angle) * r, sin(angle) * r)
+	# Sincroniza inimigos já vivos para o peer recém-conectado
+	var spawner := get_tree().get_first_node_in_group("spawner")
+	if spawner and spawner.has_method("sync_enemies_to_peer"):
+		spawner.sync_enemies_to_peer(peer_id)
+	# Servidor dedicado: inicia o jogo no primeiro jogador pronto
+	if is_dedicated_server and not _dedicated_game_started:
+		_dedicated_game_started = true
+		print("[SERVER] Primeiro jogador pronto — iniciando waves")
+		game_started.emit()
 
 # Spawna um jogador em todos os peers com a autoridade correta
 @rpc("authority", "call_local", "reliable")
@@ -111,17 +136,19 @@ func _on_peer_connected(id: int) -> void:
 	connected_peers.append(id)
 	print("NetworkManager: peer %d conectou (%d/%d)" % [id, connected_peers.size() + 1, MAX_CLIENTS + 1])
 	peer_connected.emit(id)
-	# Sala cheia: inicia automaticamente e fecha para novas conexões
 	if connected_peers.size() >= MAX_CLIENTS:
-		print("NetworkManager: sala cheia — iniciando partida")
+		# Sala cheia: fecha para novas conexões
+		print("NetworkManager: sala cheia")
 		room_full.emit()
-		# Recusa novas conexões
 		if multiplayer.multiplayer_peer is ENetMultiplayerPeer:
 			(multiplayer.multiplayer_peer as ENetMultiplayerPeer).refuse_new_connections = true
+	# Servidor dedicado: inicia (ou mantém) a partida a cada novo jogador
+	if is_dedicated_server:
 		start_game()
 
 func _on_peer_disconnected(id: int) -> void:
 	connected_peers.erase(id)
+	ready_peers.erase(id)
 	print("NetworkManager: peer %d desconectou" % id)
 	peer_disconnected.emit(id)
 	# Remove o nó do jogador desconectado (em todos os peers)

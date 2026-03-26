@@ -37,18 +37,26 @@ var _timer: float = 1.0  # delay inicial antes da wave 1
 
 # Estados: idle | spawning | waiting | cooldown
 var _state: String = "idle"
+var _game_started: bool = false  # em servidor dedicado, aguarda start_game()
 
 var _cages: Array = []
 var _eid_counter: int = 0  # ID único por inimigo (para sincronizar com clientes)
+var _live_enemy_cfg: Dictionary = {}  # eid → cfg (para sincronizar late-joiners)
+var _slowmo_count: int = 0            # slowmos simultâneos ativos (multiplayer)
 
 func _ready() -> void:
 	add_to_group("spawner")
 	_player = get_tree().get_first_node_in_group("player")
 	EnemyController.reset_token_pool()
 	_cache_cages()
-	# Multiplayer: cliente avisa servidor que terminou de carregar
 	if NetworkManager.is_multiplayer_session and not multiplayer.is_server():
+		# Cliente avisa servidor que terminou de carregar
 		NetworkManager.rpc_id(1, "_rpc_client_ready")
+	if NetworkManager.is_dedicated_server:
+		# Servidor dedicado: aguarda primeiro jogador pronto antes de iniciar waves
+		NetworkManager.game_started.connect(func(): _game_started = true)
+	else:
+		_game_started = true
 
 func _cache_cages() -> void:
 	_cages.clear()
@@ -60,6 +68,8 @@ func _cache_cages() -> void:
 			_cages.append(child)
 
 func _process(delta: float) -> void:
+	if not _game_started:
+		return
 	# Em multiplayer, apenas o servidor controla o spawner
 	if NetworkManager.is_multiplayer_session and not multiplayer.is_server():
 		return
@@ -86,7 +96,8 @@ func _process(delta: float) -> void:
 				_timer = between_waves_delay
 
 		"cooldown":
-			if _timer <= 0.0 and get_tree().get_nodes_in_group("chest").size() == 0:
+			var chest_done := get_tree().get_nodes_in_group("chest").size() == 0
+			if _timer <= 0.0 and (chest_done or NetworkManager.is_multiplayer_session):
 				_start_next_wave()
 
 func _start_next_wave() -> void:
@@ -194,6 +205,7 @@ func _spawn_one() -> void:
 			"trapper": is_trapper_type, "leader": is_leader_type,
 			"cage": use_cage
 		}
+		_live_enemy_cfg[eid] = cfg
 		rpc("_net_client_spawn", eid, pos, cfg)
 
 	# Efeito de emergência da jaula — após todo o setup de escala/stats
@@ -257,6 +269,39 @@ func _net_client_spawn(eid: int, pos: Vector3, cfg: Dictionary) -> void:
 	if cfg.get("cage", false):
 		enemy.emerge_from_cage()
 
+# Servidor → todos: slowmo de morte + registra kill no HUD (roteado pelo spawner)
+@rpc("authority", "call_local", "reliable")
+func _net_kill_fx() -> void:
+	_slowmo_count += 1
+	Engine.time_scale = 0.15
+	await get_tree().create_timer(0.18, true, false, true).timeout
+	_slowmo_count = maxi(0, _slowmo_count - 1)
+	if _slowmo_count == 0:
+		Engine.time_scale = 1.0
+	var hud = get_tree().get_first_node_in_group("hud")
+	if hud and hud.has_method("register_kill"):
+		hud.register_kill()
+
+# Servidor → cliente: estado de um inimigo (roteado pelo spawner para evitar "node not found")
+@rpc("authority", "unreliable_ordered")
+func _net_enemy_state(eid: int, pos: Vector3, rot_y: float, hp: int, dead: bool, anim_flags: int) -> void:
+	var node := get_tree().current_scene.get_node_or_null("Enemy_%d" % eid)
+	if not is_instance_valid(node):
+		return  # puppet ainda não foi spawnado — ignora silenciosamente
+	node._apply_net_state(pos, rot_y, hp, dead, anim_flags)
+
+# Servidor → peer específico: sync de inimigos já vivos (late-joiner)
+func sync_enemies_to_peer(peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var scene := get_tree().current_scene
+	for eid in _live_enemy_cfg.keys():
+		var node := scene.get_node_or_null("Enemy_%d" % eid)
+		if not is_instance_valid(node) or node.get("is_dead"):
+			_live_enemy_cfg.erase(eid)
+			continue
+		rpc_id(peer_id, "_net_client_spawn", eid, node.global_position, _live_enemy_cfg[eid])
+
 # Servidor → todos: wave announcement
 @rpc("authority", "call_local", "reliable")
 func _net_hud_set_wave(wave: int, count: int) -> void:
@@ -272,7 +317,16 @@ func _net_hud_wave_clear() -> void:
 		hud.show_wave_clear()
 
 func _spawn_chest() -> void:
-	# Remove old chest if any
+	if NetworkManager.is_multiplayer_session:
+		rpc("_net_spawn_chest")
+	else:
+		_do_spawn_chest()
+
+@rpc("authority", "call_local", "reliable")
+func _net_spawn_chest() -> void:
+	_do_spawn_chest()
+
+func _do_spawn_chest() -> void:
 	for c in get_tree().get_nodes_in_group("chest"):
 		c.queue_free()
 	var c_scene := chest_scene

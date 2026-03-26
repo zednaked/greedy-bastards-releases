@@ -309,7 +309,10 @@ func _on_thrown_hit(body: Node) -> void:
 
 	if body.is_in_group("enemies") and body.has_method("take_hit"):
 		var dir := _thrown.linear_velocity.normalized()
-		body.take_hit(dir * throw_damage_knockback)
+		if NetworkManager.is_multiplayer_session and not multiplayer.is_server():
+			body.rpc_id(1, "rpc_take_hit", dir * throw_damage_knockback, multiplayer.get_unique_id())
+		else:
+			body.take_hit(dir * throw_damage_knockback)
 
 	# Para e espera pickup
 	var impact_dir := _thrown.linear_velocity.normalized()
@@ -386,7 +389,11 @@ func _detonate_damage(pos: Vector3) -> void:
 		var dist := e.global_position.distance_to(pos)
 		if dist <= RADIUS and enemy.has_method("take_hit"):
 			var dir := (e.global_position - pos).normalized()
-			enemy.take_hit((dir + Vector3.UP * 0.4).normalized() * FORCE)
+			var kb := (dir + Vector3.UP * 0.4).normalized() * FORCE
+			if NetworkManager.is_multiplayer_session and not multiplayer.is_server():
+				enemy.rpc_id(1, "rpc_take_hit", kb, multiplayer.get_unique_id())
+			else:
+				enemy.take_hit(kb)
 
 func _spawn_detonation_fx(pos: Vector3) -> void:
 	const R := 5.0
