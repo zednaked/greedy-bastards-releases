@@ -2,7 +2,7 @@
 
 Arena melee FPS. Lute contra hordas infinitas de goblins com uma espada. Jogue sozinho ou com até 3 amigos em co-op. Sem armas de fogo, sem magia — só você, uma lâmina e reflexos.
 
-> **[⬇ Baixar última versão](../../releases/latest)**
+> **[⬇ Baixar v1.0](../../releases/latest)**
 
 ---
 
@@ -53,7 +53,7 @@ Os jogadores remotos aparecem como **névoa etérea** com a espada visível. A c
 
 ## Progressão
 
-Cada **wave** (onda) de goblins que você eliminar abre um **baú** no centro da arena. Gaste suas moedas em upgrades:
+Cada **wave** de goblins eliminada abre um **baú** no centro da arena. Gaste suas moedas em upgrades:
 
 | Upgrade | Efeito |
 |---|---|
@@ -68,13 +68,11 @@ Cada **wave** (onda) de goblins que você eliminar abre um **baú** no centro da
 | Ganância | Moedas voam para você de longe |
 | Armadura | Leva menos dano quando desarmado |
 
-Moedas são dropadas pelos goblins ao morrer.
-
 ---
 
 ## Inimigos
 
-Os goblins ficam mais rápidos, mais duros e mais variados a cada wave:
+Os goblins se organizam em **grupos coesos** — não atacam em fila, cercam, coordenam recuos e reagem ao moral do bando.
 
 | Wave | Novidade |
 |---|---|
@@ -83,9 +81,9 @@ Os goblins ficam mais rápidos, mais duros e mais variados a cada wave:
 | 4 | **Arqueiros** que mantêm distância e arremessam projéteis |
 | 6 | **Bombers** com bombas de fusível (explodem após 2s ou no impacto) |
 | 8 | **Trappers** que plantam armadilhas invisíveis de espinhos |
-| 8+ | Goblins mais resistentes; grupos ficam com raiva ao ver aliados morrerem |
+| 8+ | Goblins entram em **raiva** ao ver aliados morrerem — veias de energia vermelha, mais rápidos e agressivos |
 
-Os goblins se comunicam — morte de um aliado pode deixar outros com raiva (mais agressivos) ou com medo. O **howler** bufa aliados próximos. O **líder** coordena o grupo; sua morte afeta o moral de todos.
+O **howler** bufa aliados próximos. O **líder** coordena o grupo; sua morte afeta o moral de todos.
 
 ---
 
@@ -93,9 +91,10 @@ Os goblins se comunicam — morte de um aliado pode deixar outros com raiva (mai
 
 | Plataforma | Arquivo |
 |---|---|
-| **Linux** x86_64 | `GreedyBastards.x86_64` |
-| **macOS** | `GreedyBastards.zip` |
-| **Windows** x86_64 | `GreedyBastards.exe` |
+| **Windows** | `GreedyBastards-windows.zip` |
+| **Linux** | `GreedyBastards-linux.zip` |
+| **macOS** | `GreedyBastards-macos.zip` |
+| **Servidor dedicado** (Linux) | `GreedyBastards-server.zip` |
 
 Veja a aba **[Releases](../../releases)** para todas as versões.
 
